@@ -12,7 +12,7 @@ Returns all energy readings within a datetime range
 ## Example
 ### Request
 
-    https://api.copperlabs.com/api/v1/data
+    https://api.copperlabs.com/api/v1/data?meterId=<METER>&startDate=<DATETIME>&endDate=<DATETIME>
 
 ### Response
 
