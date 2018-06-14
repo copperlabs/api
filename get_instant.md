@@ -5,7 +5,7 @@
 Returns the last few energy readings, current power (2nd energy derivative) and acceleration (3rd energy derivative)
 
 ## Parameters
-  meterId
+  * meterId
 
 ## Example
 ### Request
