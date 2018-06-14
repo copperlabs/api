@@ -1,6 +1,6 @@
 # Get Day Insights
 
-    GET data
+    GET insights
     
 Returns insights for a particular day
 
