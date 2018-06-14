@@ -15,7 +15,7 @@ For API support, please email info@copperlabs.com
 * Access varies from real-time high-resolution meter data to anonymized trends across geographies - depending on utility, ownership, meter and key.
 
 ## Throttling and caching
-* Clients are rate-limited to a maximum of 1 request per minute and 1000 requests per day.
+* Clients are rate-limited to a maximum of 100 requests per hour and 1000 requests per day.
 * Responses may contain a Cache-Control header which instructs the client to cache a response. The client should expect data to be valid for anywhere from 1 minute to an entire year depending on the data requested.
 
 ## API Versioning
