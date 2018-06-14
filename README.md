@@ -85,6 +85,6 @@ https://api.copperlabs.com/xxxx/startDate=2018-01-01+00%3A00%3A00.000000&endDate
 - **<code>GET</code> Get Historical Unabridged**
 - **[<code>GET</code> Get Insights for Day](/get_insights_day.md)**
 - **[<code>GET</code> Get Insights for Month](/get_insights_month.md)**
-- **<code>GET</code> Get Energy Archetype]**
+- **<code>GET</code> Get Energy Archetype**
 
 
