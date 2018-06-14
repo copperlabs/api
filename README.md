@@ -41,12 +41,13 @@ For PUT and POST requests the body of your request may include a JSON payload, a
 Each response will be returned with one of the following HTTP status codes:
 
 * `200` `OK` The request was successful
-* `400` `Bad Request` There was a problem with the request (security, malformed, data validation, etc.)
+* `400` `Bad request` There was a problem with the request (security, malformed, data validation, etc.)
 * `401` `Unauthorized` The supplied API credentials are invalid
 * `403` `Forbidden` The credentials provided do not have permission to access the requested resource
 * `404` `Not found` An attempt was made to access a resource that does not exist in the API
 * `405` `Method not allowed` The resource being accessed doesn't support the method specified (GET, POST, etc.).
-* `500` `Server Error` An error on the server occurred
+* `429` `Too many requests` Client has sent too many requests in a given amount of time (rate limiting) 
+* `500` `Server error` An error on the server occurred
 
 ## Request Modifiers and Record Filtering
 Request modifiers may be included in the request URI query string. The following modifiers are available throughout the API.  Other resource-specific modifiers are covered under the specific resource documentation sections.
@@ -67,21 +68,23 @@ https://api.copperlabs.com/xxxx/startDate=2018-01-01+00%3A00%3A00.000000&endDate
 
 ## Resources
 
-### Configuration and General
-- **[<code>GET</code> Get Meter](/get_nda.md)**
-- **[<code>POST</code> Set Meter](/get_nda.md)**
-- **[<code>GET</code> Get Gateway](/get_nda.md)**
-- **[<code>PUT</code> Set_Gateway](/get_nda.md)**
-- **[<code>GET</code> Get Client](/get_nda.md)**
-- **[<code>POST</code> Set Client](/get_nda.md)**
-- **[<code>POST</code> Send Alert to Client](/get_nda.md)**
+### Configuration
+- **<code>GET</code> Get Meter**
+- **<code>POST</code> Set Meter**
+- **<code>GET</code> Get Gateway**
+- **<code>PUT</code> Set Gateway**
+
+### Client
+- **<code>GET</code> Get Client**
+- **<code>POST</code> Set Client**
+- **<code>POST</code> Send Alert to Client**
 
 ### Data and Insights
 - **[<code>GET</code> Get Instant](/get_instant.md)**
 - **[<code>GET</code> Get Historical](/get_data.md)**
-- **[<code>GET</code> Get Historical Unabridged](/get_nda.md)**
+- **<code>GET</code> Get Historical Unabridged**
 - **[<code>GET</code> Get Insights for Day](/get_insights_day.md)**
 - **[<code>GET</code> Get Insights for Month](/get_insights_month.md)**
-- **[<code>GET</code> Get Energy Archetype](/get_nda.md)**
+- **<code>GET</code> Get Energy Archetype]**
 
 
