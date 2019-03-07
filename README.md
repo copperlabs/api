@@ -11,8 +11,8 @@ For API support, please email info@copperlabs.com
 
 ## Authentication
 * Insecure connections are rejected, https is required. 
-* Requests without an 'api-key' header are rejected.
-* Access varies from real-time high-resolution meter data to anonymized trends across geographies - depending on utility, ownership, meter and key.
+* Requests without a proper authentication token in the header are rejected.
+* Access varies from real-time high-resolution meter data to anonymized trends across geographies - depending on utility, ownership, meter and permissions specific to the authentication.
 
 ## Throttling and caching
 * Clients are rate-limited to a maximum of 100 requests per hour and 1000 requests per day.
@@ -21,7 +21,7 @@ For API support, please email info@copperlabs.com
 ## API Versioning
 The first part of the URI path specifies the API version you wish to access in the format `v{version_number}`. 
 
-For example, version 1 of the API (most current) is accessible via:
+For example, version 1 of the API is accessible via:
 
 ```no-highlight
 https://api.copperlabs.com/api/v1/
@@ -49,42 +49,8 @@ Each response will be returned with one of the following HTTP status codes:
 * `429` `Too many requests` Client has sent too many requests in a given amount of time (rate limiting) 
 * `500` `Server error` An error on the server occurred
 
-## Request Modifiers and Record Filtering
-Request modifiers may be included in the request URI query string. The following modifiers are available throughout the API.  Other resource-specific modifiers are covered under the specific resource documentation sections.
-* `startDate` ISO8601 date-time UTC.  
-* `endDate` ISO8601 date-time UTC.  
-* `date` ISO8601 date-time UTC.  
-* `gatewayId` The gateway ID for the request.
-* `meterId` The meter ID for the request.
-* `appId` The client ID for the request.
+## Public API Endpoints
+- **https://api.copperlabs.com/api/v2/**
 
-Some values, such as dates, support range selection by using 'startDate' and 'endDate'.  i.e. all data available from January 1, 2018 at 8:00AM to February 1, 2018 at 8:00AM could be retrieved with the following query:
-
-```no-highlight
-https://api.copperlabs.com/xxxx/startDate=2018-01-01+00%3A00%3A00.000000&endDate=2018-02-01+00%3A00%3A00.000000
-```
-
-#### Note that all dates are in the url-encoded ISO8601 and returned in UTC - you will have to account for time zone adjustment depending on your client's location.
-
-## Resources
-
-### Configuration
-- **<code>GET</code> Get Meter**
-- **<code>POST</code> Set Meter**
-- **<code>GET</code> Get Gateway**
-- **<code>PUT</code> Set Gateway**
-
-### Client
-- **<code>GET</code> Get Client**
-- **<code>POST</code> Set Client**
-- **<code>POST</code> Send Alert to Client**
-
-### Data and Insights
-- **[<code>GET</code> Get Instant](/get_instant.md)**
-- **[<code>GET</code> Get Historical](/get_data.md)**
-- **<code>GET</code> Get Historical Unabridged**
-- **[<code>GET</code> Get Insights for Day](/get_insights_day.md)**
-- **[<code>GET</code> Get Insights for Month](/get_insights_month.md)**
-- **<code>GET</code> Get Energy Archetype**
 
 
