@@ -10,6 +10,7 @@ The Copper API is used by the Copper mobile application which handles meter on-b
 For API support, please email info@copperlabs.com
 
 ## Authentication
+* OAuth2 enables clients to obtain limited access to data without sharing passwords with third-party clients. Third-party clients can access data from a user's account by using the auth.copperlabs.com service. See [An Introduction to OAuth 2](https://www.digitalocean.com/community/tutorials/an-introduction-to-oauth-2) for more information.
 * Insecure connections are rejected, https is required. 
 * Requests without a proper authentication token in the header are rejected.
 * Access varies from real-time high-resolution meter data to anonymized trends across geographies - depending on utility, ownership, meter and permissions specific to the authentication.
