@@ -14,6 +14,7 @@ import os
 from pprint import pformat
 import requests
 from requests_toolbelt.utils import dump
+from texttable import Texttable
 from urllib import urlencode
 import webbrowser
 
@@ -135,7 +136,7 @@ class CopperClient():
             raise Exception(r)
         return r.json()
 
-    def print_usage_data(self):
+    def print_usage_data(self, summary=False):
         today = datetime.utcnow().date()
         start = today.strftime("%Y-%m-%dT%H:%M:%SZ")
         headers = {'content-type': 'application/json',
@@ -143,16 +144,23 @@ class CopperClient():
                        token_type=self.token_data['token_type'],
                        access_token=self.token_data['access_token'])}
 
+        if summary:
+            table = Texttable()
+            print('Summary Table:')
+            table.header(['Premise Name', 'Meter ID', 'Meter Type', 'Current Value'])
+
         for premise in self.app['premise_list']:
             prefix = '\n*** premise = {name}'.format(name=premise['name'])
-            print('{prefix} ***\n{premise}'.format(
-                prefix=prefix, premise=pformat(premise)))
+            if not summary:
+                print('{prefix} ***\n{premise}'.format(
+                      prefix=prefix, premise=pformat(premise)))
             # ask for premise data
             url = '{url}/app/instant/premise/{id}'.format(
                 url=CopperClient.API_URL, id=premise['id'])
             p = self.get_helper(url, headers)
-            print('{prefix}, instant usage *** \n{usage}'.format(
-                prefix=prefix, usage=pformat(p)))
+            if not summary:
+                print('{prefix}, instant usage *** \n{usage}'.format(
+                      prefix=prefix, usage=pformat(p)))
             for meter in premise['meter_list']:
                 # ask for power (not energy) data for all metrs on this account
                 granularity = 'bihour'
@@ -160,20 +168,27 @@ class CopperClient():
                     url=CopperClient.API_URL, id=meter['id'],
                     gran=granularity, start=start)
                 m = self.get_helper(url, headers)
-                print('{prefix}, daily meter usage with {gran} granularity *** \n{meter}'.format(
-                    prefix=prefix, meter=pformat(m), gran=granularity))
+                if not summary:
+                    print('{prefix}, daily meter usage with {gran} granularity *** \n{meter}'.format(
+                          prefix=prefix, meter=pformat(m), gran=granularity))
+                else:
+                    table.add_row([premise['name'], m['meter_id'], m['meter_type'], m['results'][-1]['value']])
 
+        if summary:
+            print(table.draw() + '\n')
 
 def main():
     parser = argparse.ArgumentParser(description='Raw data download from Copper Labs.')
     parser.add_argument('--debug', dest='debug', action='store_true', default=False,
                         help='Enable debug output')
+    parser.add_argument('--summary', dest='summary', action='store_true', default=False,
+                        help='Display summary meter table')
     args = parser.parse_args()
 
     # This next walks through user login (authorization, access_token grant, etc.)
     c = CopperClient(args.debug)
 
-    c.print_usage_data()
+    c.print_usage_data(args.summary)
 
 
 if __name__== "__main__":
