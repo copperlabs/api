@@ -53,5 +53,10 @@ Each response will be returned with one of the following HTTP status codes:
 ## Public API Endpoints
 - **https://api.copperlabs.com/api/v2/**
 
+## Example python command-line script
+This script will log in using your previously-registered email address (same as the mobile app installed on your phone), and provide a raw JSON dump of all premises and meter data attached to your account.
+
+### Pre-requisites:
+- pip install -r requirements.txt
 
 
