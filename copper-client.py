@@ -21,7 +21,8 @@ import webbrowser
 
 class UnauthorizedError(Exception):
     def __init__(self, error):
-        Exception.__init__(self, 'error = {error}'.format(error=pformat(error)))
+        Exception.__init__(self, 'error = {error}'.format(
+            error=pformat(error)))
         self.error = error
 
 
@@ -30,6 +31,7 @@ class CopperClient():
     CLIENT_ID = 's2FKWj80rK2HfBwOeacICoLGhbBxHCEl'
     BASE_AUTH_URL = 'https://auth.copperlabs.com'
     BASE_API_URL = 'https://api.copperlabs.com'
+    AUDIENCE_URL = 'https://api.copperlabs.com'
     API_URL = '{url}/api/v2'.format(url=BASE_API_URL)
 
     def __init__(self, debug=False):
@@ -42,18 +44,20 @@ class CopperClient():
         self.token_data = {}
         # use cache if it exists
         if os.path.isfile(CopperClient.CACHEFILE):
-            if self.debug: print('Using cached token data')
+            if self.debug:
+                print('Using cached token data')
             with open(CopperClient.CACHEFILE, 'r') as file:
                 self.token_data = json.load(file)
         else:
-            if self.debug: print('Generating new token data')
+            if self.debug:
+                print('Generating new token data')
             auth_code = self.__authorize()
             self.__get_token_data_from_auth_code(auth_code)
         # attempt to fetch app state, use this to test access_token and
         # refresh if possible
         try:
             self.__get_app_state()
-        except:
+        except Exception:
             # assume the access_token expired, automatically refresh
             self.__get_token_data_from_refresh_token()
             self.__get_app_state()
@@ -67,7 +71,7 @@ class CopperClient():
                   'code_challenge_method': 'S256',
                   'client_id': CopperClient.CLIENT_ID,
                   'scope': 'app offline_access',
-                  'audience': CopperClient.BASE_API_URL,
+                  'audience': CopperClient.AUDIENCE_URL,
                   'redirect_uri': CopperClient.API_URL}
         qstr = urlencode(params)
         webbrowser.open_new_tab('{url}/?{qstr}'.format(url=url, qstr=qstr))
@@ -76,14 +80,16 @@ class CopperClient():
         print 'Opening a web brower to complete passwordless login with Copper Labs...'
         print ''
         print 'Upon successful login, the URL in your browser will contain a code.'
-        print 'Example, {url}?code=bk1AEJKK0NUYh-XI'.format(url=CopperClient.API_URL)
+        print 'Example, {url}?code=bk1AEJKK0NUYh-XI'.format(
+            url=CopperClient.API_URL)
         print ''
-        print 'enter it now:'
+        print 'Copy the text following "code=" and enter it here:'
         auth_code = str(raw_input())
         return auth_code
 
     def __get_token_data_from_auth_code(self, auth_code):
-        if self.debug: print('trade the auth code for an auth token')
+        if self.debug:
+            print('trade the auth code for an auth token')
         url = '{url}/oauth/token'.format(url=CopperClient.BASE_AUTH_URL)
         headers = {'content-type': 'application/json'}
         data = {'grant_type': 'authorization_code',
@@ -94,7 +100,8 @@ class CopperClient():
         self.token_data = self.post_helper(url, headers, data)
 
     def __get_token_data_from_refresh_token(self):
-        if self.debug: print('trade the refresh token for an auth token')
+        if self.debug:
+            print('trade the refresh token for an auth token')
         url = '{url}/oauth/token'.format(url=CopperClient.BASE_AUTH_URL)
         headers = {'content-type': 'application/json'}
         data = {'grant_type': 'refresh_token',
@@ -121,7 +128,8 @@ class CopperClient():
 
     def get_helper(self, url, headers):
         r = requests.get(url, headers=headers)
-        if self.debug: print(dump.dump_all(r).decode('utf-8') + '\n\n')
+        if self.debug:
+            print(dump.dump_all(r).decode('utf-8') + '\n\n')
         if r.status_code != 200:
             if r.status_code == 401 or r.status_code == 403:
                 raise UnauthorizedError(r)
@@ -131,7 +139,8 @@ class CopperClient():
 
     def post_helper(self, url, headers, data):
         r = requests.post(url, headers=headers, json=data)
-        if self.debug: print(dump.dump_all(r).decode('utf-8') + '\n\n')
+        if self.debug:
+            print(dump.dump_all(r).decode('utf-8') + '\n\n')
         if r.status_code != 200:
             raise Exception(r)
         return r.json()
@@ -147,7 +156,8 @@ class CopperClient():
         if summary:
             table = Texttable()
             print('Summary Table:')
-            table.header(['Premise Name', 'Meter ID', 'Meter Type', 'Current Value'])
+            table.header([
+                'Premise Name', 'Meter ID', 'Meter Type', 'Current Value'])
 
         for premise in self.app['premise_list']:
             prefix = '\n*** premise = {name}'.format(name=premise['name'])
@@ -161,35 +171,43 @@ class CopperClient():
             if not summary:
                 print('{prefix}, instant usage *** \n{usage}'.format(
                       prefix=prefix, usage=pformat(p)))
-            for meter in premise['meter_list']:
-                # ask for power (not energy) data for all metrs on this account
-                granularity = 'bihour'
-                url = '{url}/app/usage/{id}?granularity={gran}&start={start}'.format(
-                    url=CopperClient.API_URL, id=meter['id'],
-                    gran=granularity, start=start)
-                m = self.get_helper(url, headers)
-                if not summary:
-                    print('{prefix}, daily meter usage with {gran} granularity *** \n{meter}'.format(
-                          prefix=prefix, meter=pformat(m), gran=granularity))
-                else:
-                    table.add_row([premise['name'], m['meter_id'], m['meter_type'], m['results'][-1]['value']])
+                for meter in premise['meter_list']:
+                    # ask for power (not energy) for all metrs on this account
+                    granularity = 'bihour'
+                    url = ('{url}/app/usage/{id}?granularity={gran}&'
+                           'start={start}'.format(
+                            url=CopperClient.API_URL, id=meter['id'],
+                            gran=granularity, start=start))
+                    m = self.get_helper(url, headers)
+                    print('{prefix}, daily meter usage with {gran} '
+                          'granularity *** \n{meter}'.format(
+                            prefix=prefix, meter=pformat(m), gran=granularity))
+            else:
+                for meter in p['results']:
+                    table.add_row([
+                        premise['name'],
+                        meter['id'],
+                        meter['type'],
+                        meter['value']])
 
         if summary:
             print(table.draw() + '\n')
 
+
 def main():
-    parser = argparse.ArgumentParser(description='Raw data download from Copper Labs.')
-    parser.add_argument('--debug', dest='debug', action='store_true', default=False,
-                        help='Enable debug output')
-    parser.add_argument('--summary', dest='summary', action='store_true', default=False,
-                        help='Display summary meter table')
+    parser = argparse.ArgumentParser(
+        description='Raw data download from Copper Labs.')
+    parser.add_argument('--debug', dest='debug', action='store_true',
+                        default=False, help='Enable debug output')
+    parser.add_argument('--summary', dest='summary', action='store_true',
+                        default=False, help='Display summary meter table')
     args = parser.parse_args()
 
-    # This next walks through user login (authorization, access_token grant, etc.)
+    # Walk through user login (authorization, access_token grant, etc.)
     c = CopperClient(args.debug)
 
     c.print_usage_data(args.summary)
 
 
-if __name__== "__main__":
-  main()
+if __name__ == "__main__":
+    main()
