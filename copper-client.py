@@ -8,6 +8,7 @@
 import argparse
 from base64 import urlsafe_b64encode
 from datetime import datetime
+from dateutil import parser, tz
 from hashlib import sha256
 import json
 import os
@@ -154,10 +155,11 @@ class CopperClient():
                        access_token=self.token_data['access_token'])}
 
         if summary:
-            table = Texttable()
-            print('Summary Table:')
+            table = Texttable(max_width=0)
+            print('Summary Table as of {time}:'.format(time=datetime.now()))
             table.header([
-                'Premise Name', 'Meter ID', 'Meter Type', 'Current Value'])
+                'Premise Name', 'Meter ID', 'Meter Type', 'Current Value',
+                'Time Received'])
 
         for premise in self.app['premise_list']:
             prefix = '\n*** premise = {name}'.format(name=premise['name'])
@@ -184,11 +186,14 @@ class CopperClient():
                             prefix=prefix, meter=pformat(m), gran=granularity))
             else:
                 for meter in p['results']:
+                    rx_utc = parser.parse(meter['ts'][-1])
+                    rx_local = rx_utc.astimezone(tz.tzlocal())
                     table.add_row([
                         premise['name'],
                         meter['id'],
                         meter['type'],
-                        meter['value']])
+                        meter['value'],
+                        rx_local])
 
         if summary:
             print(table.draw() + '\n')
