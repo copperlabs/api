@@ -22,10 +22,10 @@ For API support, please email info@copperlabs.com
 ## API Versioning
 The first part of the URI path specifies the API version you wish to access in the format `v{version_number}`. 
 
-For example, version 1 of the API is accessible via:
+For example, version 2 of the API is accessible via:
 
 ```no-highlight
-https://api.copperlabs.com/api/v1/
+https://api.copperlabs.com/api/v2/
 ```
 
 ## HTTP requests
