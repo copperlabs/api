@@ -59,4 +59,18 @@ This script will log in using your previously-registered email address (same as 
 ### Pre-requisites:
 - pip install -r requirements.txt
 
+### Execution:
+```
+# Display summary table of connected meters with current reading
+python copper-client.py --summary
 
+# Dump instant, current day and baseline usage per meter for all premises to CSV file(s)
+python copper-client.py  --save-to-csv
+```
+
+#### Note for interpreting CSV output files
+Meter usage and baseline data returns a timeseries, by default on a bihour basis, in addition to summary stats for the meter. Each row in the CSV starts with one of four patterns:
+- `usage_summary__` => will be the same for a set of unique meter usage_result__ rows
+- `usage_result__` => will be unique for each meter row
+- `baseline_summary__` => will be the same for a set of unique meter usage_result__ rows
+- `baseline_result__` => will be unique for each meter row
