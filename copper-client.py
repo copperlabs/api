@@ -7,7 +7,9 @@
 
 import argparse
 from base64 import urlsafe_b64encode
-from datetime import datetime
+import copy
+import csv
+from datetime import datetime, timedelta
 from dateutil import parser, tz
 from hashlib import sha256
 import json
@@ -35,9 +37,9 @@ class CopperClient():
     AUDIENCE_URL = 'https://api.copperlabs.com'
     API_URL = '{url}/api/v2'.format(url=BASE_API_URL)
 
-    def __init__(self, debug=False):
+    def __init__(self, args):
         self.app = {}
-        self.debug = debug
+        self.args = args
         self.code_verifier = urlsafe_b64encode(os.urandom(32)).replace('=', '')
         m = sha256()
         m.update(self.code_verifier)
@@ -45,12 +47,12 @@ class CopperClient():
         self.token_data = {}
         # use cache if it exists
         if os.path.isfile(CopperClient.CACHEFILE):
-            if self.debug:
+            if self.args.debug:
                 print('Using cached token data')
             with open(CopperClient.CACHEFILE, 'r') as file:
                 self.token_data = json.load(file)
         else:
-            if self.debug:
+            if self.args.debug:
                 print('Generating new token data')
             auth_code = self.__authorize()
             self.__get_token_data_from_auth_code(auth_code)
@@ -89,7 +91,7 @@ class CopperClient():
         return auth_code
 
     def __get_token_data_from_auth_code(self, auth_code):
-        if self.debug:
+        if self.args.debug:
             print('trade the auth code for an auth token')
         url = '{url}/oauth/token'.format(url=CopperClient.BASE_AUTH_URL)
         headers = {'content-type': 'application/json'}
@@ -101,7 +103,7 @@ class CopperClient():
         self.token_data = self.post_helper(url, headers, data)
 
     def __get_token_data_from_refresh_token(self):
-        if self.debug:
+        if self.args.debug:
             print('trade the refresh token for an auth token')
         url = '{url}/oauth/token'.format(url=CopperClient.BASE_AUTH_URL)
         headers = {'content-type': 'application/json'}
@@ -127,9 +129,14 @@ class CopperClient():
                        access_token=self.token_data['access_token'])}
         self.app = self.get_helper(url, headers)
 
+    def write_csvfile(self, output_file, rows):
+        with open(output_file, 'wb') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerows(rows)
+
     def get_helper(self, url, headers):
         r = requests.get(url, headers=headers)
-        if self.debug:
+        if self.args.debug:
             print(dump.dump_all(r).decode('utf-8') + '\n\n')
         if r.status_code != 200:
             if r.status_code == 401 or r.status_code == 403:
@@ -140,21 +147,25 @@ class CopperClient():
 
     def post_helper(self, url, headers, data):
         r = requests.post(url, headers=headers, json=data)
-        if self.debug:
+        if self.args.debug:
             print(dump.dump_all(r).decode('utf-8') + '\n\n')
         if r.status_code != 200:
             raise Exception(r)
         return r.json()
 
-    def print_usage_data(self, summary=False):
-        today = datetime.utcnow().date()
-        start = today.strftime("%Y-%m-%dT%H:%M:%SZ")
+    def print_usage_data(self):
+        today = datetime.now(tz.tzlocal()).replace(
+            hour=0, minute=0, second=0, microsecond=0)
+        start = (today - timedelta(1)).astimezone(tz.tzutc()).strftime(
+            "%Y-%m-%dT%H:%M:%SZ")
+        end = (today - timedelta(0)).astimezone(tz.tzutc()).strftime(
+            "%Y-%m-%dT%H:%M:%SZ")
         headers = {'content-type': 'application/json',
                    'Authorization': '{token_type} {access_token}'.format(
                        token_type=self.token_data['token_type'],
                        access_token=self.token_data['access_token'])}
 
-        if summary:
+        if self.args.summary:
             table = Texttable(max_width=0)
             print('Summary Table as of {time}:'.format(time=datetime.now()))
             table.header([
@@ -162,28 +173,65 @@ class CopperClient():
                 'Time Received'])
 
         for premise in self.app['premise_list']:
+            rows = []
             prefix = '\n*** premise = {name}'.format(name=premise['name'])
-            if not summary:
+            if not self.args.summary:
                 print('{prefix} ***\n{premise}'.format(
                       prefix=prefix, premise=pformat(premise)))
             # ask for premise data
             url = '{url}/app/instant/premise/{id}'.format(
                 url=CopperClient.API_URL, id=premise['id'])
             p = self.get_helper(url, headers)
-            if not summary:
+            if not self.args.summary:
                 print('{prefix}, instant usage *** \n{usage}'.format(
                       prefix=prefix, usage=pformat(p)))
                 for meter in premise['meter_list']:
                     # ask for power (not energy) for all metrs on this account
                     granularity = 'bihour'
                     url = ('{url}/app/usage/{id}?granularity={gran}&'
-                           'start={start}'.format(
+                           'start={start}&end={end}'.format(
                             url=CopperClient.API_URL, id=meter['id'],
-                            gran=granularity, start=start))
+                            gran=granularity, start=start, end=end))
                     m = self.get_helper(url, headers)
                     print('{prefix}, daily meter usage with {gran} '
                           'granularity *** \n{meter}'.format(
                             prefix=prefix, meter=pformat(m), gran=granularity))
+                    url = ('{url}/app/baseline/{id}?granularity={gran}&'
+                           'date={date}'.format(
+                            url=CopperClient.API_URL, id=meter['id'],
+                            gran=granularity, date=start))
+                    b = self.get_helper(url, headers)
+                    print('{prefix}, daily meter baseline with {gran} '
+                          'granularity *** \n{meter}'.format(
+                            prefix=prefix, meter=pformat(b), gran=granularity))
+
+                    m_copy = copy.deepcopy(m)
+                    m_results = m_copy.pop('results', [])
+                    b_copy = copy.deepcopy(b)
+                    b_series = b_copy.pop('series', [])
+                    if not rows:
+                        m_header = [
+                            'usage_summary__' + k for k in m_copy.keys()
+                        ]
+                        m_header += [
+                            'usage_result__' + k for k in m_results[0].keys()
+                        ]
+                        b_header = [
+                            'baseline_summary__' + k for k in b_copy.keys()
+                        ]
+                        b_header += [
+                            'baseline_result__' + k for k in b_series[0].keys()
+                        ]
+                        rows.append(m_header + b_header)
+                    i = 0
+                    for r in m_results:
+                        rows.append(m_copy.values() + r.values()
+                                    + b_copy.values() + b_series[i].values())
+                        i += 1
+
+                if self.args.save_to_csv:
+                    self.write_csvfile(
+                        'premise.' + premise['name'] + '.csv', rows)
             else:
                 for meter in p['results']:
                     rx_utc = parser.parse(meter['ts'][-1])
@@ -195,7 +243,7 @@ class CopperClient():
                         meter['value'],
                         rx_local])
 
-        if summary:
+        if self.args.summary:
             print(table.draw() + '\n')
 
 
@@ -206,12 +254,17 @@ def main():
                         default=False, help='Enable debug output')
     parser.add_argument('--summary', dest='summary', action='store_true',
                         default=False, help='Display summary meter table')
+    parser.add_argument('--save-to-csv', dest='save_to_csv',
+                        action='store_true', default=False,
+                        help='Write meter data to CSV file(s)')
     args = parser.parse_args()
 
     # Walk through user login (authorization, access_token grant, etc.)
-    c = CopperClient(args.debug)
+    c = CopperClient(args)
 
-    c.print_usage_data(args.summary)
+    c.print_usage_data()
+
+    print('complete!')
 
 
 if __name__ == "__main__":
