@@ -31,7 +31,7 @@ class UnauthorizedError(Exception):
 
 class CopperClient():
     CACHEFILE = '.cache'
-    CLIENT_ID = 's2FKWj80rK2HfBwOeacICoLGhbBxHCEl'
+    CLIENT_ID = 'RvXeGVUtzcz9iWnP4QJFwnVwCHVUoMIA'
     BASE_AUTH_URL = 'https://auth.copperlabs.com'
     BASE_API_URL = 'https://api.copperlabs.com'
     AUDIENCE_URL = 'https://api.copperlabs.com'
