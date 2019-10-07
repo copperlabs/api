@@ -1,2 +1,5 @@
-.cache
-venv
+.*cache
+venv*
+.envrc
+generated
+*.pyc
