@@ -105,3 +105,11 @@ class CopperCloudClient():
             else:
                 raise Exception(r)
         return r.json()
+
+    def post_helper(self, url, headers, data):
+        r = requests.post(url, headers=headers, json=data)
+        if self.args.debug:
+            print(dump.dump_all(r).decode('utf-8') + '\n\n')
+        if r.status_code != 200:
+            raise Exception(r)
+        return r.json()
