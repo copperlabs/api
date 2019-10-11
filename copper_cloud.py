@@ -28,7 +28,7 @@ class CopperCloudClient():
     BASE_API_URL = 'https://api.copperlabs.com'
     API_URL = '{api_host}/api/v2'.format(api_host=BASE_API_URL)
 
-    def __init__(self, args):
+    def __init__(self, args, test_url):
         self.args = args
         self.token_data = {}
         # use cache if it exists
@@ -44,11 +44,11 @@ class CopperCloudClient():
 
         # hit API endpoint, in part to make sure the access_token is valid
         try:
-            self.__get_api_landing()
+            self.get_helper(test_url, self.build_request_headers())
         except UnauthorizedError:
             # assume the access_token expired, automatically refresh
             self.__get_token_data()
-            self.__get_api_landing()
+            self.get_helper(test_url, self.build_request_headers())
 
     def __get_token_data(self):
         if self.args.debug:
@@ -78,16 +78,6 @@ class CopperCloudClient():
         qstr = '?{qstr}'.format(
             qstr=urlencode(params)) if len(params.keys()) else ''
         return qstr
-
-    def __get_api_landing(self):
-        # ask for top-level API web page
-        url = CopperCloudClient.API_URL
-        r = requests.get(url, headers=self.build_request_headers())
-        if r.status_code != 200:
-            if r.status_code == 401 or r.status_code == 403:
-                raise UnauthorizedError(r)
-            else:
-                raise Exception(r)
 
     def build_request_headers(self):
         return {'content-type': 'application/json',

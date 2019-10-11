@@ -15,6 +15,11 @@ from pprint import pformat
 from texttable import Texttable
 
 
+BULK_URL = '{url}/enterprise/{id}/bulk'.format(
+    url=CopperCloudClient.API_URL,
+    id=os.environ['COPPER_ENTERPRISE_ID'])
+
+
 def __write_csvfile(output_file, rows):
     with open(output_file, 'wb') as csvfile:
         writer = csv.writer(csvfile)
@@ -27,11 +32,8 @@ def get_bulk_data(cloud_client):
               'Latest Timestamp',
               'Latest Value']
     headers = cloud_client.build_request_headers()
-    url = '{url}/enterprise/{id}/bulk'.format(
-        url=CopperCloudClient.API_URL,
-        id=os.environ['COPPER_ENTERPRISE_ID'])
     try:
-        meters = cloud_client.get_helper(url, headers)
+        meters = cloud_client.get_helper(BULK_URL, headers)
     except Exception as err:
         print('\nGET error:\n' + pformat(err))
     rows = []
@@ -81,7 +83,7 @@ def main():
     args = parser.parse_args()
 
     # Walk through user login (authorization, access_token grant, etc.)
-    cloud_client = CopperCloudClient(args)
+    cloud_client = CopperCloudClient(args, BULK_URL)
 
     # func = switcher.get(args.command, lambda: 'Invalid')
     title, header, rows, dtypes = args.func(cloud_client)
