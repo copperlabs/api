@@ -15,7 +15,7 @@ from pprint import pformat
 from texttable import Texttable
 
 
-BULK_URL = '{url}/enterprise/{id}/bulk'.format(
+BULK_URL = '{url}/partner/{id}/bulk'.format(
     url=CopperCloudClient.API_URL,
     id=os.environ['COPPER_ENTERPRISE_ID'])
 
@@ -38,7 +38,7 @@ def get_bulk_data(cloud_client):
         print('\nGET error:\n' + pformat(err))
     rows = []
     for meter in meters['results']:
-        url = '{url}/enterprise/meter/{id}/location'.format(
+        url = '{url}/partner/meter/{id}/location'.format(
             url=CopperCloudClient.API_URL, id=meter['meter_id'])
         try:
             location = cloud_client.get_helper(url, headers)

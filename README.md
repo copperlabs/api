@@ -76,7 +76,7 @@ This script will log in using a client ID and secret (provided out-of-band) and 
 #### Execution:
 ```
 # Bulk download of all connected meters with current reading
-python copper-enterprise-client.py --csv-output-file generated/navigant.csv bulk
+python copper-enterprise-client.py --csv-output-file generated/output.csv bulk
 ```
 
 #### Note for interpreting CSV output files
