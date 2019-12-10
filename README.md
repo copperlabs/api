@@ -73,15 +73,24 @@ python copper-client.py  --save-to-csv
 ### Enterprise (multi-account) access
 This script will log in using a client ID and secret (provided out-of-band) and dump all meters for premises within the enterprise.
 
-#### Execution:
+#### Bulk data download:
 ```
 # Bulk download of all connected meters with current reading
 python copper-enterprise-client.py --csv-output-file generated/output.csv bulk
 ```
 
-#### Note for interpreting CSV output files
+##### Note for interpreting CSV output files
 Meter usage and baseline data returns a timeseries, by default on a bihour basis, in addition to summary stats for the meter. Each row in the CSV starts with one of four patterns:
 - `usage_summary__` => will be the same for a set of unique meter usage_result__ rows
 - `usage_result__` => will be unique for each meter row
 - `baseline_summary__` => will be the same for a set of unique meter usage_result__ rows
 - `baseline_result__` => will be unique for each meter row
+
+#### Detailed historical data download:
+```
+# Hourly download of all connected meters
+python copper-enterprise-client.py --csv-output-file generated/premise_meter_summary.csv meter usage '2019-05-01T06:00:00Z' '2019-11-01T05:00:00Z'
+```
+
+##### Note for interpreting CSV output files
+The CSV output file specific on the command-line contains summary information for premises, meters and sum usage between the start and end dates. Per-meter usage returns an hourly, interpolated timeseries and is written into a set of files; on per meter.

@@ -13,11 +13,13 @@ from dateutil import parser, tz
 import os
 from pprint import pformat
 from texttable import Texttable
+from urllib import urlencode
 
 
 BULK_URL = '{url}/partner/{id}/bulk'.format(
     url=CopperCloudClient.API_URL,
     id=os.environ['COPPER_ENTERPRISE_ID'])
+TIME_FMT = "%Y-%m-%dT%H:%M:%SZ"
 
 
 def __write_csvfile(output_file, rows):
@@ -58,6 +60,55 @@ def get_bulk_data(cloud_client):
     return title, header, rows, dtypes
 
 
+def get_meter_usage(cloud_client):
+    start = parser.parse(cloud_client.args.start).strftime(TIME_FMT)
+    end = parser.parse(cloud_client.args.end).strftime(TIME_FMT)
+    title = 'Meter usage download {start} through {end}'.format(
+        start=start,  end=end)
+    header = ['ID', 'Type', 'Sum Usage']
+    headers = cloud_client.build_request_headers()
+    try:
+        meters = cloud_client.get_helper(BULK_URL, headers)
+    except Exception as err:
+        print('\nGET error:\n' + pformat(err))
+    rows = []
+    for meter in meters['results']:
+        print('Collecting data for meter ' + meter['meter_id'])
+        url = '{url}/partner/{pid}/meter/{mid}/usage?{qstr}'.format(
+            url=CopperCloudClient.API_URL,
+            pid=os.environ['COPPER_ENTERPRISE_ID'],
+            mid=meter['meter_id'],
+            qstr=urlencode({
+                'granularity': 'hour',
+                'start': start,
+                'end': end,
+                'include_start': False}))
+        try:
+            usage = cloud_client.get_helper(url, headers)
+        except Exception as err:
+            print('\nGET error:\n' + pformat(err))
+        rows.append([
+            usage['meter_id'],
+            usage['meter_type'],
+            usage['sum_usage'],
+        ])
+        results = []
+        results.append(['timestamp', 'energy', 'power'])
+        for result in usage['results']:
+            rx_utc = parser.parse(result['time'])
+            rx_local = rx_utc.astimezone(tz.tzlocal()).replace(tzinfo=None)
+            results.append([
+                rx_local,
+                result['value'],
+                result['power'],
+                ])
+        __write_csvfile('generated/{mid}.csv'.format(
+            mid=usage['meter_id'].replace(':', '_')),
+            results)
+    dtypes = ['t', 't', 'a']
+    return title, header, rows, dtypes
+
+
 def main():
     parser = argparse.ArgumentParser(
         add_help=True,
@@ -79,6 +130,18 @@ def main():
 
     parser_a = subparser.add_parser("bulk")
     parser_a.set_defaults(func=get_bulk_data)
+
+    parser_b = subparser.add_parser("meter")
+    subparser_b = parser_b.add_subparsers()
+    parser_c = subparser_b.add_parser("usage")
+    time_fmt = '%%Y-%%m-%%dT%%H:%%M:%%SZ'
+    parser_c.add_argument(
+        'start',
+        help='Query start time, formatted as: ' + time_fmt)
+    parser_c.add_argument(
+        'end',
+        help='Query end time, formatted as: ' + time_fmt)
+    parser_c.set_defaults(func=get_meter_usage)
 
     args = parser.parse_args()
 
