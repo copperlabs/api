@@ -35,7 +35,7 @@ class CopperClient():
     BASE_AUTH_URL = 'https://auth.copperlabs.com'
     BASE_API_URL = 'https://api.copperlabs.com'
     AUDIENCE_URL = 'https://api.copperlabs.com'
-    API_URL = '{url}/api/v2'.format(url=BASE_API_URL)
+    API_URL = '{url}/api/v2/app'.format(url=BASE_API_URL)
 
     def __init__(self, args):
         self.app = {}
@@ -122,7 +122,7 @@ class CopperClient():
 
     def __get_app_state(self):
         # ask for app data
-        url = '{url}/app/state'.format(url=CopperClient.API_URL)
+        url = '{url}/state'.format(url=CopperClient.API_URL)
         headers = {'content-type': 'application/json',
                    'Authorization': '{token_type} {access_token}'.format(
                        token_type=self.token_data['token_type'],
@@ -179,7 +179,7 @@ class CopperClient():
                 print('{prefix} ***\n{premise}'.format(
                       prefix=prefix, premise=pformat(premise)))
             # ask for premise data
-            url = '{url}/app/instant/premise/{id}'.format(
+            url = '{url}/instant/premise/{id}'.format(
                 url=CopperClient.API_URL, id=premise['id'])
             p = self.get_helper(url, headers)
             if not self.args.summary:
@@ -188,7 +188,7 @@ class CopperClient():
                 for meter in premise['meter_list']:
                     # ask for power (not energy) for all metrs on this account
                     granularity = 'bihour'
-                    url = ('{url}/app/usage/{id}?granularity={gran}&'
+                    url = ('{url}/usage/{id}?granularity={gran}&'
                            'start={start}&end={end}'.format(
                             url=CopperClient.API_URL, id=meter['id'],
                             gran=granularity, start=start, end=end))
@@ -196,7 +196,7 @@ class CopperClient():
                     print('{prefix}, daily meter usage with {gran} '
                           'granularity *** \n{meter}'.format(
                             prefix=prefix, meter=pformat(m), gran=granularity))
-                    url = ('{url}/app/baseline/{id}?granularity={gran}&'
+                    url = ('{url}/baseline/{id}?granularity={gran}&'
                            'date={date}'.format(
                             url=CopperClient.API_URL, id=meter['id'],
                             gran=granularity, date=start))
