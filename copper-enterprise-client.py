@@ -12,6 +12,7 @@ from copper_cloud import CopperCloudClient
 from dateutil import parser, tz
 import os
 from pprint import pformat
+import sys
 from texttable import Texttable
 from urllib import urlencode
 
@@ -22,6 +23,11 @@ BULK_URL = '{url}/partner/{id}/bulk'.format(
 TIME_FMT = "%Y-%m-%dT%H:%M:%SZ"
 
 
+def tick():
+    print '.',
+    sys.stdout.flush()
+
+
 def __write_csvfile(output_file, rows):
     with open(output_file, 'wb') as csvfile:
         writer = csv.writer(csvfile)
@@ -30,33 +36,48 @@ def __write_csvfile(output_file, rows):
 
 def get_bulk_data(cloud_client):
     title = 'Bulk meter download'
-    header = ['ID', 'Type', 'Address', 'City', 'Postal Code',
-              'Latest Timestamp',
-              'Latest Value']
+    if cloud_client.args.detailed:
+        header = ['ID', 'Type', 'Address', 'City', 'Postal Code',
+                  'Latest Timestamp',
+                  'Latest Value']
+    else:
+        header = ['ID', 'Type', 'Latest Timestamp', 'Latest Value']
     headers = cloud_client.build_request_headers()
     try:
         meters = cloud_client.get_helper(BULK_URL, headers)
     except Exception as err:
         print('\nGET error:\n' + pformat(err))
     rows = []
+    print('Building information for {num} meters...'.format(
+        num=len(meters['results'])))
     for meter in meters['results']:
-        url = '{url}/partner/meter/{id}/location'.format(
-            url=CopperCloudClient.API_URL, id=meter['meter_id'])
-        try:
-            location = cloud_client.get_helper(url, headers)
-        except Exception as err:
-            print('\nGET error:\n' + pformat(err))
         timestamp_utc = parser.parse(meter['timestamp'])
-        rows.append([
-            meter['meter_id'],
-            meter['meter_type'],
-            location['street_address'],
-            location['city_town'],
-            location['postal_code'].rjust(5, '0'),
-            timestamp_utc.astimezone(tz.tzlocal()),
-            meter['value']
-        ])
-    dtypes = ['t', 't', 't', 't', 't', 'a', 'a']
+        if cloud_client.args.detailed:
+            url = '{url}/partner/meter/{id}/location'.format(
+                url=CopperCloudClient.API_URL, id=meter['meter_id'])
+            try:
+                location = cloud_client.get_helper(url, headers)
+                tick()
+            except Exception as err:
+                print('\nGET error:\n' + pformat(err))
+            rows.append([
+                meter['meter_id'],
+                meter['meter_type'],
+                location['street_address'],
+                location['city_town'],
+                location['postal_code'].rjust(5, '0'),
+                timestamp_utc.astimezone(tz.tzlocal()),
+                meter['value']
+            ])
+            dtypes = ['t', 't', 't', 't', 't', 'a', 'a']
+        else:
+            rows.append([
+                meter['meter_id'],
+                meter['meter_type'],
+                timestamp_utc.astimezone(tz.tzlocal()),
+                meter['value']
+            ])
+            dtypes = ['t', 't', 'a', 'a']
     return title, header, rows, dtypes
 
 
@@ -129,6 +150,9 @@ def main():
     subparser = parser.add_subparsers()
 
     parser_a = subparser.add_parser("bulk")
+    parser_a.add_argument(
+        '--detailed', dest='detailed', action='store_true', default=False,
+        help='Enable detailed output')
     parser_a.set_defaults(func=get_bulk_data)
 
     parser_b = subparser.add_parser("meter")
