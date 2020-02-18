@@ -9,6 +9,7 @@
 import argparse
 import csv
 from copper_cloud import CopperCloudClient
+from datetime import datetime
 from dateutil import parser, tz
 import os
 from pprint import pformat
@@ -48,9 +49,10 @@ def get_bulk_data(cloud_client):
     except Exception as err:
         print('\nGET error:\n' + pformat(err))
     rows = []
-    print('Building information for {num} meters...'.format(
-        num=len(meters['results'])))
+    print('Building information for {num} meters on {now}...'.format(
+        num=len(meters['results']), now=datetime.now().strftime('%c')))
     for meter in meters['results']:
+        meter_value = format(meter['value'], '.3f')
         timestamp_utc = parser.parse(meter['timestamp'])
         if cloud_client.args.detailed:
             url = '{url}/partner/meter/{id}/location'.format(
@@ -67,17 +69,17 @@ def get_bulk_data(cloud_client):
                 location['city_town'],
                 location['postal_code'].rjust(5, '0'),
                 timestamp_utc.astimezone(tz.tzlocal()),
-                meter['value']
+                meter_value
             ])
-            dtypes = ['t', 't', 't', 't', 't', 'a', 'a']
+            dtypes = ['t', 't', 't', 't', 't', 'a', 't']
         else:
             rows.append([
                 meter['meter_id'],
                 meter['meter_type'],
                 timestamp_utc.astimezone(tz.tzlocal()),
-                meter['value']
+                meter_value
             ])
-            dtypes = ['t', 't', 'a', 'a']
+            dtypes = ['t', 't', 'a', 't']
     return title, header, rows, dtypes
 
 
@@ -179,6 +181,7 @@ def main():
     table.set_deco(Texttable.HEADER)
     table.set_cols_dtype(dtypes)
     row_align = ['l'] * len(header)
+    row_align[-1] = 'r'
     table.set_header_align(row_align)
     table.set_cols_align(row_align)
     rows.insert(0, header)
