@@ -18,10 +18,14 @@ from texttable import Texttable
 from urllib import urlencode
 
 
-BULK_URL = '{url}/partner/{id}/bulk'.format(
-    url=CopperCloudClient.API_URL,
-    id=os.environ['COPPER_ENTERPRISE_ID'])
 TIME_FMT = "%Y-%m-%dT%H:%M:%SZ"
+
+
+def __make_bulk_url(limit=1000):
+    return '{url}/partner/{id}/bulk?limit={limit}'.format(
+        url=CopperCloudClient.API_URL,
+        id=os.environ['COPPER_ENTERPRISE_ID'],
+        limit=limit)
 
 
 def tick():
@@ -44,14 +48,24 @@ def get_bulk_data(cloud_client):
     else:
         header = ['ID', 'Type', 'Latest Timestamp', 'Latest Value']
     headers = cloud_client.build_request_headers()
+    meters = []
+    more_meters = True
+    next_url = __make_bulk_url()
     try:
-        meters = cloud_client.get_helper(BULK_URL, headers)
+        while(more_meters):
+            resp = cloud_client.get_helper(next_url, headers)
+            meters += resp['results']
+            more_meters = (resp.get('next', None))
+            if (more_meters):
+                next_url = '{url}{uri}'.format(
+                    url=CopperCloudClient.BASE_API_URL,
+                    uri=resp['next'])
     except Exception as err:
         print('\nGET error:\n' + pformat(err))
     rows = []
     print('Building information for {num} meters on {now}...'.format(
-        num=len(meters['results']), now=datetime.now().strftime('%c')))
-    for meter in meters['results']:
+        num=len(meters), now=datetime.now().strftime('%c')))
+    for meter in meters:
         meter_value = format(meter['value'], '.3f')
         timestamp_utc = parser.parse(meter['timestamp'])
         if cloud_client.args.detailed:
@@ -91,7 +105,7 @@ def get_meter_usage(cloud_client):
     header = ['ID', 'Type', 'Sum Usage']
     headers = cloud_client.build_request_headers()
     try:
-        meters = cloud_client.get_helper(BULK_URL, headers)
+        meters = cloud_client.get_helper(__make_bulk_url(), headers)
     except Exception as err:
         print('\nGET error:\n' + pformat(err))
     rows = []
@@ -172,7 +186,7 @@ def main():
     args = parser.parse_args()
 
     # Walk through user login (authorization, access_token grant, etc.)
-    cloud_client = CopperCloudClient(args, BULK_URL)
+    cloud_client = CopperCloudClient(args, __make_bulk_url(limit=1))
 
     # func = switcher.get(args.command, lambda: 'Invalid')
     title, header, rows, dtypes = args.func(cloud_client)
