@@ -9,10 +9,10 @@
 import argparse
 import csv
 from copper_cloud import CopperCloudClient
-from datetime import datetime
+from datetime import datetime, timedelta, date, time
 from dateutil import parser, tz
 import os
-from pprint import pformat
+from pprint import pformat, pprint
 import sys
 from texttable import Texttable
 from urllib import urlencode
@@ -39,14 +39,7 @@ def __write_csvfile(output_file, rows):
         writer.writerows(rows)
 
 
-def get_bulk_data(cloud_client):
-    title = 'Bulk meter download'
-    if cloud_client.args.detailed:
-        header = ['ID', 'Type', 'Address', 'City', 'Postal Code',
-                  'Latest Timestamp',
-                  'Latest Value']
-    else:
-        header = ['ID', 'Type', 'Latest Timestamp', 'Latest Value']
+def __get_all_meters(cloud_client):
     headers = cloud_client.build_request_headers()
     meters = []
     more_meters = True
@@ -62,6 +55,33 @@ def get_bulk_data(cloud_client):
                     uri=resp['next'])
     except Exception as err:
         print('\nGET error:\n' + pformat(err))
+    return meters
+
+
+def __get_meter_usage(cloud_client, meter_id, start, end, granularity):
+    headers = cloud_client.build_request_headers()
+    url = '{url}/partner/{pid}/meter/{mid}/usage?{qstr}'.format(
+        url=CopperCloudClient.API_URL,
+        pid=os.environ['COPPER_ENTERPRISE_ID'],
+        mid=meter_id,
+        qstr=urlencode({
+            'granularity': granularity,
+            'start': start,
+            'end': end,
+            'include_start': False}))
+    return cloud_client.get_helper(url, headers)
+
+
+def get_bulk_data(cloud_client):
+    title = 'Bulk meter download'
+    if cloud_client.args.detailed:
+        header = ['ID', 'Type', 'Address', 'City', 'Postal Code',
+                  'Latest Timestamp',
+                  'Latest Value']
+    else:
+        header = ['ID', 'Type', 'Latest Timestamp', 'Latest Value']
+    headers = cloud_client.build_request_headers()
+    meters = __get_all_meters(cloud_client)
     rows = []
     print('Building information for {num} meters on {now}...'.format(
         num=len(meters), now=datetime.now().strftime('%c')))
@@ -72,19 +92,19 @@ def get_bulk_data(cloud_client):
             url = '{url}/partner/meter/{id}/location'.format(
                 url=CopperCloudClient.API_URL, id=meter['meter_id'])
             try:
-                location = cloud_client.get_helper(url, headers)
                 tick()
+                location = cloud_client.get_helper(url, headers)
+                rows.append([
+                    meter['meter_id'],
+                    meter['meter_type'],
+                    location['street_address'],
+                    location['city_town'],
+                    location['postal_code'].rjust(5, '0'),
+                    timestamp_utc.astimezone(tz.tzlocal()),
+                    meter_value
+                ])
             except Exception as err:
                 print('\nGET error:\n' + pformat(err))
-            rows.append([
-                meter['meter_id'],
-                meter['meter_type'],
-                location['street_address'],
-                location['city_town'],
-                location['postal_code'].rjust(5, '0'),
-                timestamp_utc.astimezone(tz.tzlocal()),
-                meter_value
-            ])
             dtypes = ['t', 't', 't', 't', 't', 'a', 't']
         else:
             rows.append([
@@ -103,27 +123,11 @@ def get_meter_usage(cloud_client):
     title = 'Meter usage download {start} through {end}'.format(
         start=start,  end=end)
     header = ['ID', 'Type', 'Sum Usage']
-    headers = cloud_client.build_request_headers()
-    try:
-        meters = cloud_client.get_helper(__make_bulk_url(), headers)
-    except Exception as err:
-        print('\nGET error:\n' + pformat(err))
+    meters = __get_all_meters(cloud_client)
     rows = []
-    for meter in meters['results']:
+    for meter in meters:
         print('Collecting data for meter ' + meter['meter_id'])
-        url = '{url}/partner/{pid}/meter/{mid}/usage?{qstr}'.format(
-            url=CopperCloudClient.API_URL,
-            pid=os.environ['COPPER_ENTERPRISE_ID'],
-            mid=meter['meter_id'],
-            qstr=urlencode({
-                'granularity': 'hour',
-                'start': start,
-                'end': end,
-                'include_start': False}))
-        try:
-            usage = cloud_client.get_helper(url, headers)
-        except Exception as err:
-            print('\nGET error:\n' + pformat(err))
+        usage = __get_meter_usage(cloud_client, meter['meter_id'], start, end, cloud_client.args.granularity)
         rows.append([
             usage['meter_id'],
             usage['meter_type'],
@@ -146,6 +150,65 @@ def get_meter_usage(cloud_client):
     return title, header, rows, dtypes
 
 
+def get_water_meter_reversals(cloud_client):
+    midnight = datetime.combine(date.today(), time())
+    start = (midnight - timedelta(days=30)).strftime(TIME_FMT)
+    end = midnight.strftime(TIME_FMT)
+    title = 'Suspect water meter reversals'
+    header = ['Address', 'Indoor Usage', 'Outdoor Usage']
+    headers = cloud_client.build_request_headers()
+    meters = __get_all_meters(cloud_client)
+    rows = []
+    prems = {}
+    num = cloud_client.args.check_limit if cloud_client.args.check_limit else len(meters)
+    # Step 1: sort meters by prem
+    print('Correlating water meters for each home...')
+    for meter in meters:
+        if not meter['meter_type'].startswith('water_'):
+            continue
+        if not num:
+            break
+        num -= 1
+        tick()
+        url = '{url}/partner/meter/{id}/location'.format(
+            url=CopperCloudClient.API_URL, id=meter['meter_id'])
+        location = cloud_client.get_helper(url, headers)
+        if location['street_address'] not in prems.keys():
+            prems[location['street_address']] = {}
+        prems[location['street_address']][meter['meter_type']] = {
+            'meter_id': meter['meter_id']
+        }
+    # Step 2: fetch meter usage and look for gross imbalance in usage
+    print('Checking for potential water-meter reversals...')
+    for (address, p) in prems.items():
+        tick()
+        indoor = {'sum_usage': None}
+        outdoor = {'sum_usage': None}
+        if 'water_indoor' in p.keys():
+            indoor = __get_meter_usage(cloud_client, p['water_indoor']['meter_id'], start, end, 'day')
+        if 'water_outdoor' in p.keys():
+            outdoor = __get_meter_usage(cloud_client, p['water_outdoor']['meter_id'], start, end, 'day')
+        add_the_row = False
+        if not indoor['sum_usage'] or not outdoor['sum_usage']:
+            # Flag missing data for further investigation
+            add_the_row = True
+        elif cloud_client.args.method == 'summer':
+            # During summer: possible reversal if indoors dwarfs outdoor
+            if indoor['sum_usage'] > 1000 and indoor['sum_usage'] > outdoor['sum_usage'] * 10:
+                add_the_row = True
+        elif outdoor['sum_usage'] > 1000:
+            # During winter: possible reserval if outdoor has non-trivial usage
+            add_the_row = True
+        if add_the_row:
+            rows.append([
+                address,
+                indoor['sum_usage'],
+                outdoor['sum_usage']
+            ])
+    dtypes = ['a'] * len(header)
+    return title, header, rows, dtypes
+
+
 def main():
     parser = argparse.ArgumentParser(
         add_help=True,
@@ -160,7 +223,7 @@ def main():
         '--debug', dest='debug', action='store_true', default=False,
         help='Enable debug output')
     parser.add_argument(
-        '--query-limit', dest='query_limit', default=None,
+        '--query-limit', type=int, dest='query_limit', default=None,
         help='Limit API query (for debugging purposes).')
 
     subparser = parser.add_subparsers()
@@ -174,6 +237,9 @@ def main():
     parser_b = subparser.add_parser("meter")
     subparser_b = parser_b.add_subparsers()
     parser_c = subparser_b.add_parser("usage")
+    parser_c.add_argument(
+        '--granularity', dest='granularity', default='hour',
+        help='Set query granularity for time-series data.')
     time_fmt = '%%Y-%%m-%%dT%%H:%%M:%%SZ'
     parser_c.add_argument(
         'start',
@@ -182,6 +248,14 @@ def main():
         'end',
         help='Query end time, formatted as: ' + time_fmt)
     parser_c.set_defaults(func=get_meter_usage)
+    parser_d = subparser_b.add_parser("check-for-water-reversals")
+    parser_d.set_defaults(func=get_water_meter_reversals)
+    parser_d.add_argument(
+        '--check-limit', type=int, dest='check_limit', default=None,
+        help='Limit number of homes to check (for debugging purposes).')
+    parser_d.add_argument(
+        '--method', dest='method', default='summer',
+        help='Method for checking [summer, winter]')
 
     args = parser.parse_args()
 
