@@ -141,7 +141,11 @@ def get_meter_usage(cloud_client):
     end = parser.parse(cloud_client.args.end).strftime(TIME_FMT)
     title = "Meter usage download {start} through {end}".format(start=start, end=end)
     header = ["ID", "Type", "Sum Usage"]
-    meters = __get_all_meters(cloud_client)
+    meters = []
+    if cloud_client.args.meter_id:
+        meters.append({"meter_id": cloud_client.args.meter_id})
+    else:
+        meters = __get_all_meters(cloud_client)
     rows = []
     for meter in meters:
         print ("Collecting data for meter " + meter["meter_id"])
@@ -280,6 +284,12 @@ def main():
     parser_b = subparser.add_parser("meter")
     subparser_b = parser_b.add_subparsers()
     parser_c = subparser_b.add_parser("usage")
+    parser_c.add_argument(
+        "--meter_id",
+        dest="meter_id",
+        default=None,
+        help="Select a single meter to query.",
+    )
     parser_c.add_argument(
         "--granularity",
         dest="granularity",
