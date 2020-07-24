@@ -64,11 +64,8 @@ This script will log in using your previously-registered email address (same as 
 
 #### Execution:
 ```
-# Display summary table of connected meters with current reading
-python copper-client.py --summary
-
-# Dump instant, current day and baseline usage per meter for all premises to CSV file(s)
-python copper-client.py  --save-to-csv
+# Display summary table of all meters for all homes on the account
+python copper-client.py
 ```
 
 ### Enterprise (multi-account) access
