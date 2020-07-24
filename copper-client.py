@@ -129,11 +129,6 @@ class CopperClient():
                        access_token=self.token_data['access_token'])}
         self.app = self.get_helper(url, headers)
 
-    def write_csvfile(self, output_file, rows):
-        with open(output_file, 'wb') as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerows(rows)
-
     def get_helper(self, url, headers):
         r = requests.get(url, headers=headers)
         if self.args.debug:
@@ -165,86 +160,26 @@ class CopperClient():
                        token_type=self.token_data['token_type'],
                        access_token=self.token_data['access_token'])}
 
-        if self.args.summary:
-            table = Texttable(max_width=0)
-            print('Summary Table as of {time}:'.format(time=datetime.now()))
-            table.header([
-                'Premise Name', 'Meter ID', 'Meter Type', 'Current Value',
-                'Time Received'])
+        table = Texttable(max_width=0)
+        print('Summary Table as of {time}:'.format(time=datetime.now()))
+        table.header([
+            'Premise Name', 'Meter ID', 'Meter Type', 'Current Value',
+            'Time Received'])
 
         for premise in self.app['premise_list']:
-            rows = []
-            prefix = '\n*** premise = {name}'.format(name=premise['name'])
-            if not self.args.summary:
-                print('{prefix} ***\n{premise}'.format(
-                      prefix=prefix, premise=pformat(premise)))
             # ask for premise data
-            url = '{url}/instant/premise/{id}'.format(
+            url = '{url}/instant/{id}'.format(
                 url=CopperClient.API_URL, id=premise['id'])
             p = self.get_helper(url, headers)
-            if not self.args.summary:
-                print('{prefix}, instant usage *** \n{usage}'.format(
-                      prefix=prefix, usage=pformat(p)))
-                for meter in premise['meter_list']:
-                    # ask for power (not energy) for all metrs on this account
-                    granularity = 'bihour'
-                    url = ('{url}/usage/{id}?granularity={gran}&'
-                           'start={start}&end={end}'.format(
-                            url=CopperClient.API_URL, id=meter['id'],
-                            gran=granularity, start=start, end=end))
-                    m = self.get_helper(url, headers)
-                    print('{prefix}, daily meter usage with {gran} '
-                          'granularity *** \n{meter}'.format(
-                            prefix=prefix, meter=pformat(m), gran=granularity))
-                    url = ('{url}/baseline/{id}?granularity={gran}&'
-                           'date={date}'.format(
-                            url=CopperClient.API_URL, id=meter['id'],
-                            gran=granularity, date=start))
-                    b = self.get_helper(url, headers)
-                    print('{prefix}, daily meter baseline with {gran} '
-                          'granularity *** \n{meter}'.format(
-                            prefix=prefix, meter=pformat(b), gran=granularity))
+            for meter in p['results']:
+                table.add_row([
+                    premise['name'],
+                    meter['id'],
+                    meter['type'],
+                    meter['instant_power'],
+                    meter['updated_at']])
 
-                    m_copy = copy.deepcopy(m)
-                    m_results = m_copy.pop('results', [])
-                    b_copy = copy.deepcopy(b)
-                    b_series = b_copy.pop('series', [])
-                    if not rows:
-                        m_header = [
-                            'usage_summary__' + k for k in m_copy.keys()
-                        ]
-                        m_header += [
-                            'usage_result__' + k for k in m_results[0].keys()
-                        ]
-                        b_header = [
-                            'baseline_summary__' + k for k in b_copy.keys()
-                        ]
-                        b_header += [
-                            'baseline_result__' + k for k in b_series[0].keys()
-                        ]
-                        rows.append(m_header + b_header)
-                    i = 0
-                    for r in m_results:
-                        rows.append(m_copy.values() + r.values()
-                                    + b_copy.values() + b_series[i].values())
-                        i += 1
-
-                if self.args.save_to_csv:
-                    self.write_csvfile(
-                        'premise.' + premise['name'] + '.csv', rows)
-            else:
-                for meter in p['results']:
-                    rx_utc = parser.parse(meter['ts'][-1])
-                    rx_local = rx_utc.astimezone(tz.tzlocal())
-                    table.add_row([
-                        premise['name'],
-                        meter['id'],
-                        meter['type'],
-                        meter['value'],
-                        rx_local])
-
-        if self.args.summary:
-            print(table.draw() + '\n')
+        print(table.draw() + '\n')
 
 
 def main():
@@ -252,11 +187,6 @@ def main():
         description='Raw data download from Copper Labs.')
     parser.add_argument('--debug', dest='debug', action='store_true',
                         default=False, help='Enable debug output')
-    parser.add_argument('--summary', dest='summary', action='store_true',
-                        default=False, help='Display summary meter table')
-    parser.add_argument('--save-to-csv', dest='save_to_csv',
-                        action='store_true', default=False,
-                        help='Write meter data to CSV file(s)')
     args = parser.parse_args()
 
     # Walk through user login (authorization, access_token grant, etc.)
