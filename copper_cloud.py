@@ -10,7 +10,10 @@ import os
 from pprint import pformat
 import requests
 from requests_toolbelt.utils import dump
-from urllib import urlencode
+try:
+    from urllib import urlencode
+except ImportError:
+    from urllib.parse import urlencode
 
 
 class UnauthorizedError(Exception):

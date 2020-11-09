@@ -1,4 +1,4 @@
-#  Copyright 2019 Copper Labs, Inc.
+#  Copyright 2019-2020 Copper Labs, Inc.
 #
 #  copper-enterprise-client.py
 #
@@ -15,7 +15,10 @@ import os
 from pprint import pformat, pprint
 import sys
 from texttable import Texttable
-from urllib import urlencode
+try:
+    from urllib import urlencode
+except ImportError:
+    from urllib.parse import urlencode
 
 
 TIME_FMT = "%Y-%m-%dT%H:%M:%SZ"
@@ -35,7 +38,7 @@ def tick():
 
 
 def __write_csvfile(output_file, rows):
-    with open(output_file, "wb") as csvfile:
+    with open(output_file, "w") as csvfile:
         writer = csv.writer(csvfile)
         writer.writerows(rows)
 
@@ -74,7 +77,13 @@ def __get_meter_usage(cloud_client, meter_id, start, end, granularity):
             }
         ),
     )
-    return cloud_client.get_helper(url, headers)
+    usage = None
+    try:
+        return cloud_client.get_helper(url, headers)
+    except:
+        pass
+    return usage
+
 
 
 def get_bulk_data(cloud_client):
@@ -152,6 +161,8 @@ def get_meter_usage(cloud_client):
         usage = __get_meter_usage(
             cloud_client, meter["meter_id"], start, end, cloud_client.args.granularity
         )
+        if not usage:
+            continue
         rows.append(
             [usage["meter_id"], usage["meter_type"], usage["sum_usage"],]
         )
@@ -164,7 +175,7 @@ def get_meter_usage(cloud_client):
                 [rx_local, result["value"], result["power"],]
             )
         __write_csvfile(
-            "generated/{mid}.csv".format(mid=usage["meter_id"].replace(":", "_")),
+            "{output_dir}/{mid}.csv".format(output_dir=cloud_client.args.output_dir, mid=usage["meter_id"].replace(":", "_")),
             results,
         )
     dtypes = ["t", "t", "a"]
@@ -248,6 +259,12 @@ def main():
         help="Write output to CSV file.",
     )
     parser.add_argument(
+        "--output-dir",
+        dest="output_dir",
+        default='generated',
+        help="Write output to specified directory.",
+    )
+    parser.add_argument(
         "--quiet",
         dest="quiet",
         action="store_true",
@@ -285,7 +302,7 @@ def main():
     subparser_b = parser_b.add_subparsers()
     parser_c = subparser_b.add_parser("usage")
     parser_c.add_argument(
-        "--meter_id",
+        "--meter-id",
         dest="meter_id",
         default=None,
         help="Select a single meter to query.",
@@ -339,7 +356,10 @@ def main():
         print (table.draw() + "\n")
 
     if args.csv_output_file:
-        __write_csvfile(args.csv_output_file, rows)
+        output_file = args.csv_output_file
+        if not output_file.startswith('generated/'):
+            output_file = os.path.join(cloud_client.args.output_dir, cloud_client.args.csv_output_file)
+        __write_csvfile(output_file, rows)
 
     print ("complete!")
 

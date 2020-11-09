@@ -56,8 +56,17 @@ Each response will be returned with one of the following HTTP status codes:
 
 ## Example python command-line scripts
 
+### (OPT) Create a python virtual environment
+```
+mkdir -p ./venv
+virtualenv -p `which python2` ./venv
+. venv/bin/activate
+```
+
 ### Pre-requisites:
-- pip install -r requirements.txt
+```
+pip install -r requirements.txt
+```
 
 ### Individual (single-account) access
 This script will log in using your previously-registered email address (same as the mobile app installed on your phone), and provide a raw JSON dump of all premises and meter data attached to your account.
@@ -72,9 +81,13 @@ python copper-client.py
 This script will log in using a client ID and secret (provided out-of-band) and dump all meters for premises within the enterprise.
 
 #### Bulk data download:
+Bulk download of all connected meters with current reading
 ```
-# Bulk download of all connected meters with current reading
 python copper-enterprise-client.py --csv-output-file generated/output.csv bulk
+```
+Include premise address:
+```
+python copper-enterprise-client.py --csv-output-file generated/output.csv bulk --detailed
 ```
 
 ##### Note for interpreting CSV output files
@@ -88,6 +101,18 @@ Meter usage and baseline data returns a timeseries, by default on a bihour basis
 ```
 # Hourly download of all connected meters
 python copper-enterprise-client.py --csv-output-file generated/premise_meter_summary.csv meter usage '2019-05-01T06:00:00Z' '2019-11-01T05:00:00Z'
+```
+```
+# Daily download of one connected meter:
+# Note your OS might not allow creation of files with a ':' in the name, so replace ':' with '_' and manually enter the meter ID in the output filename.
+python copper-enterprise-client.py --csv-output-file generated/meter_usage.${meter_id}.csv meter usage '2020-08-18T06:00:00Z' '2020-12-22T06:00:00Z' --meter-id ${meter_id} --granularity day
+```
+Or use the bash helper script to atomize high-granularity queries spanning a long timeframe due to API throttling:
+```
+# Minute download of all connected meters
+./data_dump.sh ${name} ${start_date} ${days} ${granularity}
+ex:
+./data_dump.sh foo 2020-10-01 31 minute
 ```
 
 ##### Note for interpreting CSV output files
