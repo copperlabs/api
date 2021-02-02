@@ -80,6 +80,12 @@ python copper-client.py
 ### Enterprise (multi-account) access
 This script will log in using a client ID and secret (provided out-of-band) and dump all meters for premises within the enterprise.
 
+#### Premise Listing:
+Download all premises created in the enterprise
+```
+python copper-enterprise-client.py --csv-output-file generated/premise_listing.csv premise
+```
+
 #### Bulk data download:
 Bulk download of all connected meters with current reading
 ```

@@ -145,6 +145,44 @@ def get_bulk_data(cloud_client):
     return title, header, rows, dtypes
 
 
+def get_prem_data(cloud_client):
+    title = "Premise download"
+    header = [
+        "ID",
+        "Address",
+        "Suite/Apt",
+        "City",
+        "Postal Code",
+        "County",
+        "State",
+    ]
+    headers = cloud_client.build_request_headers()
+    url =  "{url}/partner/{id}/premise".format(
+        url=CopperCloudClient.API_URL,
+        id=os.environ["COPPER_ENTERPRISE_ID"],
+    )
+    prems = cloud_client.get_helper(url, headers)
+    rows = []
+    print (
+        "Building information for {num} premises on {now}...".format(
+            num=len(prems), now=datetime.now().strftime("%c")
+        )
+    )
+    for p in prems:
+        rows.append([
+            p["id"],
+            p["street_address"],
+            p["suite_apartment_unit"],
+            p["city_town"],
+            p["postal_code"],
+            p["county_district"],
+            p["state_region"],
+
+        ])
+    dtypes = ["a"] * len(header)
+    return title, header, rows, dtypes
+
+
 def get_meter_usage(cloud_client):
     start = parser.parse(cloud_client.args.start).strftime(TIME_FMT)
     end = parser.parse(cloud_client.args.end).strftime(TIME_FMT)
@@ -333,6 +371,9 @@ def main():
         help="Method for checking [summer, winter]",
     )
 
+    parser_prem = subparser.add_parser("premise")
+    parser_prem.set_defaults(func=get_prem_data)
+
     args = parser.parse_args()
 
     # Walk through user login (authorization, access_token grant, etc.)
@@ -352,7 +393,7 @@ def main():
     table.add_rows(rows)
 
     if not args.quiet:
-        print ("\n\n{title}:\n".format(title=title))
+        print("\n{title} (rows={num}):".format(title=title, num=len(rows) - 1))
         print (table.draw() + "\n")
 
     if args.csv_output_file:
