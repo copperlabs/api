@@ -171,7 +171,7 @@ def get_prem_data(cloud_client):
     for p in prems:
         rows.append([
             p["id"],
-            p["street_address"],
+            p["street_address"].encode("utf8"),
             p["suite_apartment_unit"],
             p["city_town"],
             p["postal_code"],
