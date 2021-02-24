@@ -1,4 +1,4 @@
-#  Copyright 2019-2020 Copper Labs, Inc.
+#  Copyright 2019-2021 Copper Labs, Inc.
 #
 #  copper-enterprise-client.py
 #
@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, date, time
 from dateutil import parser, tz
 import os
 from pprint import pformat, pprint
+import pytz
 import sys
 from texttable import Texttable
 try:
@@ -32,18 +33,27 @@ def __make_bulk_url(limit=1000):
     )
 
 
-def tick():
-    sys.stdout.write(".")
+def __make_meter_url(limit=1000, offset=0):
+    return "{url}/partner/{id}/meter?limit={limit}&offset={offset}".format(
+        url=CopperCloudClient.API_URL,
+        id=os.environ["COPPER_ENTERPRISE_ID"],
+        limit=limit,
+        offset=offset,
+    )
+
+
+def tick(char="."):
+    sys.stdout.write(char)
     sys.stdout.flush()
 
 
-def __write_csvfile(output_file, rows):
-    with open(output_file, "w") as csvfile:
+def __write_csvfile(output_file, rows, mode="w"):
+    with open(output_file, mode) as csvfile:
         writer = csv.writer(csvfile)
         writer.writerows(rows)
 
 
-def __get_all_meters(cloud_client):
+def __get_all_meters_bulk(cloud_client):
     headers = cloud_client.build_request_headers()
     meters = []
     more_meters = True
@@ -62,28 +72,87 @@ def __get_all_meters(cloud_client):
     return meters
 
 
-def __get_meter_usage(cloud_client, meter_id, start, end, granularity):
+def __get_all_meters(cloud_client):
     headers = cloud_client.build_request_headers()
-    url = "{url}/partner/{pid}/meter/{mid}/usage?{qstr}".format(
-        url=CopperCloudClient.API_URL,
-        pid=os.environ["COPPER_ENTERPRISE_ID"],
-        mid=meter_id,
-        qstr=urlencode(
-            {
-                "granularity": granularity,
-                "start": start,
-                "end": end,
-                "include_start": False,
-            }
-        ),
-    )
-    usage = None
+    meters = []
+    more_meters = True
+    limit=1000
+    offset=0
+    next_url = __make_meter_url(limit=limit, offset=offset)
     try:
-        return cloud_client.get_helper(url, headers)
-    except:
-        pass
-    return usage
+        while more_meters:
+            resp = cloud_client.get_helper(next_url, headers)
+            meters += resp
+            more_meters = (len(resp) == limit)
+            if more_meters:
+                offset += limit
+                next_url = __make_meter_url(limit=limit, offset=offset)
+    except Exception as err:
+        raise Exception("\nGET error:\n" + pformat(err))
+    return meters
 
+
+def __daterange(start, end):
+    return (start + timedelta(days=i) for i in range((end - start).days + 1))
+
+
+def __get_meter_usage(cloud_client, meter_id, start, end, granularity, meter_created_at=None):
+    headers = cloud_client.build_request_headers()
+    if getattr(cloud_client.args, 'timezone', None):
+        location = {"timezone": cloud_client.args.timezone}
+    else:
+        url = "{url}/partner/meter/{mid}/location".format(
+            url=CopperCloudClient.API_URL,
+            mid=meter_id,
+        )
+        location = cloud_client.get_helper(url, headers)
+    tz = pytz.timezone(location["timezone"])
+    start = parser.parse(start)
+    end = parser.parse(end)
+    offset = int(tz.localize(start).strftime("%z")[:-2])
+    usage = None
+    meter_created = parser.parse(meter_created_at).astimezone(tz).replace(tzinfo=None) if meter_created_at else None
+    for d in __daterange(start, end):
+        tick()
+        istart = datetime.combine(d, time()) - timedelta(hours=offset)
+        iend = istart + timedelta(days=1)
+        if meter_created and istart < meter_created:
+            if cloud_client.args.debug:
+                print('skipping meter {} which does not exist on {}'.format(meter_id, d))
+            continue
+        url = "{url}/partner/{pid}/meter/{mid}/usage?{qstr}".format(
+            url=CopperCloudClient.API_URL,
+            pid=os.environ["COPPER_ENTERPRISE_ID"],
+            mid=meter_id,
+            qstr=urlencode(
+                {
+                    "granularity": granularity,
+                    "start": istart.strftime(TIME_FMT),
+                    "end": iend.strftime(TIME_FMT),
+                    "include_start": False,
+                }
+            ),
+        )
+        try:
+            data = cloud_client.get_helper(url, headers)
+            if not usage:
+                usage = {
+                    "meter_id": data["meter_id"],
+                    "meter_type": data["meter_type"],
+                    "sum_usage": data["sum_usage"],
+                    "results": data["results"],
+                    "tz_offset": offset,
+                    "tz": location["timezone"]
+                }
+            else:
+                usage["sum_usage"] += data["sum_usage"]
+                if len (usage["results"]):
+                    del usage["results"][-1]
+                usage["results"] += data["results"]
+
+        except Exception as err:
+            print('GET ERROR: {}'.format(pformat(err)))
+    return usage
 
 
 def get_bulk_data(cloud_client):
@@ -101,7 +170,7 @@ def get_bulk_data(cloud_client):
     else:
         header = ["ID", "Type", "Latest Timestamp", "Latest Value"]
     headers = cloud_client.build_request_headers()
-    meters = __get_all_meters(cloud_client)
+    meters = __get_all_meters_bulk(cloud_client)
     rows = []
     print (
         "Building information for {num} meters on {now}...".format(
@@ -184,22 +253,32 @@ def get_prem_data(cloud_client):
 
 
 def get_meter_usage(cloud_client):
-    start = parser.parse(cloud_client.args.start).strftime(TIME_FMT)
-    end = parser.parse(cloud_client.args.end).strftime(TIME_FMT)
-    title = "Meter usage download {start} through {end}".format(start=start, end=end)
+    title = "Meter usage download {} through {}".format(cloud_client.args.start, cloud_client.args.end)
     header = ["ID", "Type", "Sum Usage"]
     meters = []
     if cloud_client.args.meter_id:
-        meters.append({"meter_id": cloud_client.args.meter_id})
+        meters.append({"id": cloud_client.args.meter_id})
     else:
         meters = __get_all_meters(cloud_client)
     rows = []
     for meter in meters:
-        print ("Collecting data for meter " + meter["meter_id"])
+        destpath = "{output_dir}/{mid}.csv".format(output_dir=cloud_client.args.output_dir, mid=meter["id"].replace(":", "_"))
+        if os.path.isfile(destpath):
+            if cloud_client.args.debug:
+                print ("\nSkipping collection for meter " + meter["id"])
+            continue
+        print ("\nCollecting data for meter " + meter["id"])
         usage = __get_meter_usage(
-            cloud_client, meter["meter_id"], start, end, cloud_client.args.granularity
+            cloud_client,
+            meter["id"],
+            cloud_client.args.start,
+            cloud_client.args.end,
+            cloud_client.args.granularity,
+            meter["created_at"]
         )
-        if not usage:
+        if not usage or not usage["sum_usage"]:
+            if cloud_client.args.debug:
+                print('nothing to save for meter {}'.format(meter["id"]))
             continue
         rows.append(
             [usage["meter_id"], usage["meter_type"], usage["sum_usage"],]
@@ -208,14 +287,11 @@ def get_meter_usage(cloud_client):
         results.append(["timestamp", "energy", "power"])
         for result in usage["results"]:
             rx_utc = parser.parse(result["time"])
-            rx_local = rx_utc.astimezone(tz.tzlocal()).replace(tzinfo=None)
+            rx_local = rx_utc.astimezone(pytz.timezone(usage["tz"])).replace(tzinfo=None)
             results.append(
                 [rx_local, result["value"], result["power"],]
             )
-        __write_csvfile(
-            "{output_dir}/{mid}.csv".format(output_dir=cloud_client.args.output_dir, mid=usage["meter_id"].replace(":", "_")),
-            results,
-        )
+        __write_csvfile(destpath, results)
     dtypes = ["t", "t", "a"]
     return title, header, rows, dtypes
 
@@ -227,7 +303,7 @@ def get_water_meter_reversals(cloud_client):
     title = "Suspect water meter reversals"
     header = ["Address", "Indoor Usage", "Outdoor Usage"]
     headers = cloud_client.build_request_headers()
-    meters = __get_all_meters(cloud_client)
+    meters = __get_all_meters_bulk(cloud_client)
     rows = []
     prems = {}
     num = (
@@ -351,9 +427,15 @@ def main():
         default="hour",
         help="Set query granularity for time-series data.",
     )
-    time_fmt = "%%Y-%%m-%%dT%%H:%%M:%%SZ"
-    parser_c.add_argument("start", help="Query start time, formatted as: " + time_fmt)
-    parser_c.add_argument("end", help="Query end time, formatted as: " + time_fmt)
+    parser_c.add_argument(
+        "--timezone",
+        dest="timezone",
+        default=None,
+        help="Force same timezone (ex: 'America/New_York') for all meters to minimize hits on Copper Cloud.",
+    )
+    time_fmt = "%%Y-%%m-%%d"
+    parser_c.add_argument("start", help="Query start date, formatted as: " + time_fmt)
+    parser_c.add_argument("end", help="Query end date, formatted as: " + time_fmt)
     parser_c.set_defaults(func=get_meter_usage)
     parser_d = subparser_b.add_parser("check-for-water-reversals")
     parser_d.set_defaults(func=get_water_meter_reversals)
@@ -404,7 +486,7 @@ def main():
         output_file = args.csv_output_file
         if not output_file.startswith('generated/'):
             output_file = os.path.join(cloud_client.args.output_dir, cloud_client.args.csv_output_file)
-        __write_csvfile(output_file, rows)
+        __write_csvfile(output_file, rows, mode="a")
 
     print ("complete!")
 

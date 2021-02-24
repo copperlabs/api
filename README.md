@@ -106,7 +106,8 @@ Meter usage and baseline data returns a timeseries, by default on a bihour basis
 #### Detailed historical data download:
 ```
 # Hourly download of all connected meters
-python copper-enterprise-client.py --csv-output-file generated/premise_meter_summary.csv meter usage '2019-05-01T06:00:00Z' '2019-11-01T05:00:00Z'
+# Start and end dates can span many days, one csv created per meter
+python copper-enterprise-client.py --output-dir generated --csv-output-file meter_summary.csv meter usage '2020-12-22' '2021-01-12' --granularity hour
 ```
 ```
 # Daily download of one connected meter:
@@ -116,6 +117,7 @@ python copper-enterprise-client.py --csv-output-file generated/meter_usage.${met
 Or use the bash helper script (tested on macOS) to atomize high-granularity queries spanning a long timeframe due to API throttling:
 ```
 # Minute download of all connected meters
+# Start and end dates can span many days, one csv created per meter per day, organized into folders by day
 ./data_dump.sh ${name} ${start_date} ${finish_date} ${granularity}
 ex:
 ./data_dump.sh foo 2020-10-01 2020-10-31 minute
