@@ -18,7 +18,10 @@ from pprint import pformat
 import requests
 from requests_toolbelt.utils import dump
 from texttable import Texttable
-from urllib import urlencode
+try:
+    from urllib.parse import urlencode #python 3
+except Exception:
+    from urllib import urlencode #python 2
 import webbrowser
 
 
@@ -40,10 +43,10 @@ class CopperClient():
     def __init__(self, args):
         self.app = {}
         self.args = args
-        self.code_verifier = urlsafe_b64encode(os.urandom(32)).replace('=', '')
+        self.code_verifier = urlsafe_b64encode(os.urandom(32)).rstrip(b'=')
         m = sha256()
         m.update(self.code_verifier)
-        self.code_challenge = urlsafe_b64encode(m.digest()).replace('=', '')
+        self.code_challenge = urlsafe_b64encode(m.digest()).rstrip(b'=')
         self.token_data = {}
         # use cache if it exists
         if os.path.isfile(CopperClient.CACHEFILE):
@@ -79,14 +82,14 @@ class CopperClient():
         qstr = urlencode(params)
         webbrowser.open_new_tab('{url}/?{qstr}'.format(url=url, qstr=qstr))
 
-        print ''
-        print 'Opening a web brower to complete passwordless login with Copper Labs...'
-        print ''
-        print 'Upon successful login, the URL in your browser will contain a code.'
-        print 'Example, {url}?code=bk1AEJKK0NUYh-XI'.format(
-            url=CopperClient.API_URL)
-        print ''
-        print 'Copy the text following "code=" and enter it here:'
+        print ('')
+        print ('Opening a web brower to complete passwordless login with Copper Labs...')
+        print ('')
+        print ('Upon successful login, the URL in your browser will contain a code.')
+        print ('Example, {url}?code=bk1AEJKK0NUYh-XI'.format(
+            url=CopperClient.API_URL))
+        print ('')
+        print ('Copy the text following "code=" and enter it here:')
         auth_code = str(raw_input())
         return auth_code
 

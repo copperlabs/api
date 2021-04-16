@@ -33,7 +33,7 @@ def __make_bulk_url(limit=1000):
 
 
 def tick():
-    print ".",
+    sys.stdout.write(".")
     sys.stdout.flush()
 
 
@@ -379,7 +379,11 @@ def main():
     # Walk through user login (authorization, access_token grant, etc.)
     cloud_client = CopperCloudClient(args, __make_bulk_url(limit=1))
 
-    # func = switcher.get(args.command, lambda: 'Invalid')
+    # https://bugs.python.org/issue16308
+    try:
+        func = args.func
+    except AttributeError:
+        parser.error("too few arguments")
     title, header, rows, dtypes = args.func(cloud_client)
 
     table = Texttable(max_width=0)
