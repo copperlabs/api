@@ -56,16 +56,9 @@ Each response will be returned with one of the following HTTP status codes:
 
 ## Example python command-line scripts
 
-### (OPT) Create a python virtual environment
+### (OPT) Create a python virtual environment and install requirements
 ```
-mkdir -p ./venv
-virtualenv -p `which python2` ./venv
-. venv/bin/activate
-```
-
-### Pre-requisites:
-```
-pip install -r requirements.txt
+./setup.sh
 ```
 
 ### Individual (single-account) access

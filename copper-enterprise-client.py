@@ -155,6 +155,53 @@ def __get_meter_usage(cloud_client, meter_id, start, end, granularity, meter_cre
     return usage
 
 
+def __get_meter_readings(cloud_client, meter_id, start, end, granularity, meter_created_at=None):
+    headers = cloud_client.build_request_headers()
+    if getattr(cloud_client.args, 'timezone', None):
+        location = {"timezone": cloud_client.args.timezone}
+    else:
+        url = "{url}/partner/meter/{mid}/location".format(
+            url=CopperCloudClient.API_URL,
+            mid=meter_id,
+        )
+        location = cloud_client.get_helper(url, headers)
+    tz = pytz.timezone(location["timezone"])
+    start = parser.parse(start)
+    end = parser.parse(end)
+    offset = int(tz.localize(start).strftime("%z")[:-2])
+    readings = None
+    meter_created = parser.parse(meter_created_at).astimezone(tz).replace(tzinfo=None) if meter_created_at else None
+    for d in __daterange(start, end):
+        tick()
+        istart = datetime.combine(d, time()) - timedelta(hours=offset)
+        iend = istart + timedelta(days=1)
+        if meter_created and istart < meter_created:
+            if cloud_client.args.debug:
+                print('skipping meter {} which does not exist on {}'.format(meter_id, d))
+            continue
+        url = "{url}/partner/{pid}/meter/{mid}/readings?{qstr}".format(
+            url=CopperCloudClient.API_URL,
+            pid=os.environ["COPPER_ENTERPRISE_ID"],
+            mid=meter_id,
+            qstr=urlencode({
+                "start": istart.strftime(TIME_FMT),
+                "end": iend.strftime(TIME_FMT),
+            }),
+        )
+        try:
+            data = cloud_client.get_helper(url, headers)
+            data["results"] = sorted(data["results"], key=lambda x:x["time"])
+            if not readings:
+                readings = data
+            else:
+                readings["results"] += data["results"]
+
+        except Exception as err:
+            print('GET ERROR: {}'.format(pformat(err)))
+            break
+    return readings
+
+
 def get_bulk_data(cloud_client):
     title = "Bulk meter download"
     if cloud_client.args.detailed:
@@ -296,6 +343,54 @@ def get_meter_usage(cloud_client):
     return title, header, rows, dtypes
 
 
+def get_meter_readings(cloud_client):
+    title = "Meter readings download {} through {}".format(cloud_client.args.start, cloud_client.args.end)
+    header = ["ID", "Type", "Created"]
+    meters = __get_all_meters(cloud_client)
+    rows = []
+    for meter in meters:
+        if cloud_client.args.meter_id and meter["id"] != cloud_client.args.meter_id:
+            continue
+        created_utc = parser.parse(meter["created_at"])
+        created_local = created_utc.astimezone(pytz.timezone(cloud_client.args.timezone)).replace(tzinfo=None)
+        rows.append([
+            meter["id"],
+            meter["type"],
+            created_local,
+        ])
+        destpath = "{output_dir}/{mid}.csv".format(output_dir=cloud_client.args.output_dir, mid=meter["id"].replace(":", "_"))
+        if os.path.isfile(destpath):
+            if cloud_client.args.debug:
+                print ("\nSkipping collection for meter " + meter["id"])
+            continue
+        print ("\nCollecting data for meter " + meter["id"])
+        readings = __get_meter_readings(
+            cloud_client,
+            meter["id"],
+            cloud_client.args.start,
+            cloud_client.args.end,
+            meter["created_at"]
+        )
+        if not readings or not readings["results"]:
+            if cloud_client.args.debug:
+                print('nothing to save for meter {}'.format(meter["id"]))
+            continue
+        results = [["ID", "Type", "Timestamp", "Actual ({})".format(meter["uom"]), "Normalized (kwh)"]]
+        for result in readings['results']:
+            rx_utc = parser.parse(result["time"])
+            rx_local = rx_utc.astimezone(pytz.timezone(cloud_client.args.timezone)).replace(tzinfo=None)
+            results.append([
+                readings["meter_id"],
+                readings["meter_type"],
+                rx_local,
+                result["actual"],
+                result["value"],
+            ])
+        __write_csvfile(destpath, results)
+    dtypes = ["t", "t", "a"]
+    return title, header, rows, dtypes
+
+
 def get_water_meter_reversals(cloud_client):
     midnight = datetime.combine(date.today(), time())
     start = (midnight - timedelta(days=30)).strftime(TIME_FMT)
@@ -361,7 +456,7 @@ def get_water_meter_reversals(cloud_client):
     return title, header, rows, dtypes
 
 
-def main():
+def parse_args():
     parser = argparse.ArgumentParser(
         add_help=True,
         description="Command-line utilities to interact with Copper Cloud.",
@@ -437,6 +532,23 @@ def main():
     parser_c.add_argument("start", help="Query start date, formatted as: " + time_fmt)
     parser_c.add_argument("end", help="Query end date, formatted as: " + time_fmt)
     parser_c.set_defaults(func=get_meter_usage)
+    parser_meter_readings = subparser_b.add_parser("readings")
+    parser_meter_readings.add_argument(
+        "--meter-id",
+        dest="meter_id",
+        default=None,
+        help="Select a single meter to query.",
+    )
+    parser_meter_readings.add_argument(
+        "--timezone",
+        dest="timezone",
+        default="America/Denver",
+        help="Force same timezone (ex: 'America/New_York') for all meters to minimize hits on Copper Cloud.",
+    )
+    time_fmt = "%%Y-%%m-%%d"
+    parser_meter_readings.add_argument("start", help="Query start date, formatted as: " + time_fmt)
+    parser_meter_readings.add_argument("end", help="Query end date, formatted as: " + time_fmt)
+    parser_meter_readings.set_defaults(func=get_meter_readings)
     parser_d = subparser_b.add_parser("check-for-water-reversals")
     parser_d.set_defaults(func=get_water_meter_reversals)
     parser_d.add_argument(
@@ -456,7 +568,11 @@ def main():
     parser_prem = subparser.add_parser("premise")
     parser_prem.set_defaults(func=get_prem_data)
 
-    args = parser.parse_args()
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
 
     # Walk through user login (authorization, access_token grant, etc.)
     cloud_client = CopperCloudClient(args, __make_bulk_url(limit=1))
