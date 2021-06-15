@@ -302,13 +302,11 @@ def get_prem_data(cloud_client):
 def get_meter_usage(cloud_client):
     title = "Meter usage download {} through {}".format(cloud_client.args.start, cloud_client.args.end)
     header = ["ID", "Type", "Sum Usage"]
-    meters = []
-    if cloud_client.args.meter_id:
-        meters.append({"id": cloud_client.args.meter_id})
-    else:
-        meters = __get_all_meters(cloud_client)
+    meters = __get_all_meters(cloud_client)
     rows = []
     for meter in meters:
+        if cloud_client.args.meter_id and meter["id"] != cloud_client.args.meter_id:
+            continue
         destpath = "{output_dir}/{mid}.csv".format(output_dir=cloud_client.args.output_dir, mid=meter["id"].replace(":", "_"))
         if os.path.isfile(destpath):
             if cloud_client.args.debug:

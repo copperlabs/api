@@ -105,7 +105,7 @@ python copper-enterprise-client.py --output-dir generated --csv-output-file mete
 ```
 # Daily download of one connected meter:
 # Note your OS might not allow creation of files with a ':' in the name, so replace ':' with '_' and manually enter the meter ID in the output filename.
-python copper-enterprise-client.py --csv-output-file generated/meter_usage.${meter_id}.csv meter usage '2020-08-18T06:00:00Z' '2020-12-22T06:00:00Z' --meter-id ${meter_id} --granularity day
+python copper-enterprise-client.py --csv-output-file generated/meter_usage.${meter_id}.csv meter usage '2020-08-18' '2020-12-22' --meter-id ${meter_id} --granularity day
 ```
 Or use the bash helper script (tested on macOS) to atomize high-granularity queries spanning a long timeframe due to API throttling:
 ```
