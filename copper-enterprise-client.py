@@ -92,11 +92,11 @@ def __get_all_meters(cloud_client):
     return meters
 
 
-def __daterange(start, end):
-    return (start + timedelta(days=i) for i in range((end - start).days + 1))
+def __daterange(start, end, step=1):
+    return (start + timedelta(days=i) for i in range(0, (end - start).days + 1, step))
 
 
-def __get_meter_usage(cloud_client, meter_id, start, end, granularity, meter_created_at=None):
+def __get_meter_usage(cloud_client, meter_id, start, end, granularity, meter_created_at=None, step=1):
     headers = cloud_client.build_request_headers()
     if getattr(cloud_client.args, 'timezone', None):
         location = {"timezone": cloud_client.args.timezone}
@@ -112,11 +112,15 @@ def __get_meter_usage(cloud_client, meter_id, start, end, granularity, meter_cre
     offset = int(tz.localize(start).strftime("%z")[:-2])
     usage = None
     meter_created = parser.parse(meter_created_at).astimezone(tz).replace(tzinfo=None) if meter_created_at else None
-    for d in __daterange(start, end):
+    if start < meter_created:
+        start = meter_created
+    for d in __daterange(start, end, step):
         tick()
         istart = datetime.combine(d, time()) - timedelta(hours=offset)
-        iend = istart + timedelta(days=1)
-        if meter_created and istart < meter_created:
+        iend = istart + timedelta(days=step)
+        if iend > end:
+            iend = end
+        if meter_created and iend < meter_created:
             if cloud_client.args.debug:
                 print('skipping meter {} which does not exist on {}'.format(meter_id, d))
             continue
@@ -319,7 +323,8 @@ def get_meter_usage(cloud_client):
             cloud_client.args.start,
             cloud_client.args.end,
             cloud_client.args.granularity,
-            meter["created_at"]
+            meter["created_at"],
+            cloud_client.args.step
         )
         if not usage or not usage["sum_usage"]:
             if cloud_client.args.debug:
@@ -525,6 +530,13 @@ def parse_args():
         dest="timezone",
         default=None,
         help="Force same timezone (ex: 'America/New_York') for all meters to minimize hits on Copper Cloud.",
+    )
+    parser_c.add_argument(
+        "--step",
+        type=int,
+        dest="step",
+        default=1,
+        help="Set number of days (end - start) to request per API call.",
     )
     time_fmt = "%%Y-%%m-%%d"
     parser_c.add_argument("start", help="Query start date, formatted as: " + time_fmt)
