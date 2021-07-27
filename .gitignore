@@ -3,3 +3,4 @@ venv*
 .envrc
 generated
 *.pyc
+.DS_Store
