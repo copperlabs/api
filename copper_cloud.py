@@ -1,4 +1,4 @@
-#  Copyright 2019 Copper Labs, Inc.
+#  Copyright 2019-2021 Copper Labs, Inc.
 #
 #  copper_cloud.py
 #
@@ -89,7 +89,17 @@ class CopperCloudClient():
                     access_token=self.token_data['access_token'])}
 
     def get_helper(self, url, headers):
-        r = requests.get(url, headers=headers)
+        try:
+            r = requests.get(url, headers=headers)
+            self.__handle_response(r)
+        except Exception as err:
+            if err == UnauthorizedError:
+                self.__get_token_data()
+            r = requests.get(url, headers=headers)
+            self.__handle_response(r)
+        return r.json()
+    
+    def __handle_response(self, r):
         if self.args.debug:
             print(dump.dump_all(r).decode('utf-8') + '\n\n')
         if r.status_code != 200:
@@ -97,12 +107,16 @@ class CopperCloudClient():
                 raise UnauthorizedError(r)
             else:
                 raise Exception(r)
-        return r.json()
 
     def post_helper(self, url, headers, data):
-        r = requests.post(url, headers=headers, json=data)
-        if self.args.debug:
-            print(dump.dump_all(r).decode('utf-8') + '\n\n')
-        if r.status_code != 200:
-            raise Exception(r)
+        try:
+            r = requests.post(url, headers=headers, json=data)
+            self.__handle_response(r)
+        except Exception as err:
+            if err == UnauthorizedError:
+                self.__get_token_data()
+            else:
+                print(err)
+            r = requests.post(url, headers=headers, json=data)
+            self.__handle_response(r)
         return r.json()
