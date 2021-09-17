@@ -303,6 +303,42 @@ def get_prem_data(cloud_client):
     return title, header, rows, dtypes
 
 
+def get_gateway_data(cloud_client):
+    title = "Gateway download"
+    header = [
+        "ID",
+        "Premise ID",
+        "State",
+        "Model",
+        "Last Heard",
+        "Firmware Version",
+    ]
+    headers = cloud_client.build_request_headers()
+    url =  "{url}/partner/{id}/gateway".format(
+        url=CopperCloudClient.API_URL,
+        id=os.environ["COPPER_ENTERPRISE_ID"],
+    )
+    gateways = cloud_client.get_helper(url, headers)
+    rows = []
+    print (
+        "Building information for {num} gateways on {now}...".format(
+            num=len(gateways), now=datetime.now().strftime("%c")
+        )
+    )
+    for g in gateways:
+        rows.append([
+            g["id"],
+            g["premise_id"],
+            g["state"],
+            g["model"],
+            g["last_heard"],
+            g["firmware_version"],
+
+        ])
+    dtypes = ["a"] * len(header)
+    return title, header, rows, dtypes
+
+
 def get_meter_usage(cloud_client):
     title = "Meter usage download {} through {}".format(cloud_client.args.start, cloud_client.args.end)
     header = ["ID", "Type", "Sum Usage"]
@@ -577,6 +613,9 @@ def parse_args():
 
     parser_prem = subparser.add_parser("premise")
     parser_prem.set_defaults(func=get_prem_data)
+
+    parser_gateway = subparser.add_parser("gateway")
+    parser_gateway.set_defaults(func=get_gateway_data)
 
     return parser.parse_args()
 
