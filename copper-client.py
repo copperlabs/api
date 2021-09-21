@@ -23,6 +23,8 @@ try:
 except Exception:
     from urllib import urlencode #python 2
 import webbrowser
+if hasattr(__builtins__, 'raw_input'):
+    input = raw_input
 
 
 class UnauthorizedError(Exception):
@@ -90,7 +92,7 @@ class CopperClient():
             url=CopperClient.API_URL))
         print ('')
         print ('Copy the text following "code=" and enter it here:')
-        auth_code = str(raw_input())
+        auth_code = str(input())
         return auth_code
 
     def __get_token_data_from_auth_code(self, auth_code):
@@ -99,7 +101,7 @@ class CopperClient():
         url = '{url}/oauth/token'.format(url=CopperClient.BASE_AUTH_URL)
         headers = {'content-type': 'application/json'}
         data = {'grant_type': 'authorization_code',
-                'code_verifier': self.code_verifier,
+                'code_verifier': self.code_verifier.decode(),
                 'client_id': CopperClient.CLIENT_ID,
                 'code': auth_code,
                 'redirect_uri': CopperClient.API_URL}
