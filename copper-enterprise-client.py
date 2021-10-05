@@ -33,12 +33,13 @@ def __make_bulk_url(limit=1000):
     )
 
 
-def __make_meter_url(limit=1000, offset=0):
-    return "{url}/partner/{id}/meter?limit={limit}&offset={offset}".format(
+def __make_element_url(endpoint, limit=1000, offset=0):
+    return "{url}/partner/{id}/{endpoint}?limit={limit}&offset={offset}".format(
         url=CopperCloudClient.API_URL,
         id=os.environ["COPPER_ENTERPRISE_ID"],
         limit=limit,
         offset=offset,
+        endpoint=endpoint
     )
 
 
@@ -72,24 +73,24 @@ def __get_all_meters_bulk(cloud_client):
     return meters
 
 
-def __get_all_meters(cloud_client):
+def __get_all_elements(cloud_client, endpoint):
     headers = cloud_client.build_request_headers()
-    meters = []
-    more_meters = True
+    elements = []
+    more_elements = True
     limit=1000
     offset=0
-    next_url = __make_meter_url(limit=limit, offset=offset)
+    next_url = __make_element_url(endpoint, limit=limit, offset=offset)
     try:
-        while more_meters:
+        while more_elements:
             resp = cloud_client.get_helper(next_url, headers)
-            meters += resp
-            more_meters = (len(resp) == limit)
-            if more_meters:
+            elements += resp
+            more_elements = (len(resp) == limit)
+            if more_elements:
                 offset += limit
-                next_url = __make_meter_url(limit=limit, offset=offset)
+                next_url = __make_element_url(endpoint, limit=limit, offset=offset)
     except Exception as err:
         raise Exception("\nGET error:\n" + pformat(err))
-    return meters
+    return elements
 
 
 def __daterange(start, end, step=1):
@@ -222,38 +223,33 @@ def get_bulk_data(cloud_client):
         ]
     else:
         header = ["ID", "Type", "Latest Timestamp", "Latest Value"]
-    headers = cloud_client.build_request_headers()
-    meters = __get_all_meters_bulk(cloud_client)
+    bulk_meters = __get_all_meters_bulk(cloud_client)
+    meters = {meter["id"]: meter for meter in __get_all_elements(cloud_client, "meter")}
+    premises = {}
+    if cloud_client.args.detailed:
+        premises = {premise["id"]: premise for premise in __get_all_elements(cloud_client, "premise")}
     rows = []
     print (
         "Building information for {num} meters on {now}...".format(
-            num=len(meters), now=datetime.now().strftime("%c")
+            num=len(bulk_meters), now=datetime.now().strftime("%c")
         )
     )
-    for meter in meters:
+    for meter in bulk_meters:
+        tick()
         meter_value = format(meter["value"], ".3f")
         timestamp_utc = parser.parse(meter["timestamp"])
         if cloud_client.args.detailed:
-            url = "{url}/partner/{eid}/meter/{mid}/location".format(
-                url=CopperCloudClient.API_URL, mid=meter["meter_id"],
-                eid=os.environ["COPPER_ENTERPRISE_ID"],
+            rows.append(
+                [
+                    meter["meter_id"],
+                    meter["meter_type"],
+                    premises[meters[meter["meter_id"]]["premise_id"]]["street_address"],
+                    premises[meters[meter["meter_id"]]["premise_id"]]["city_town"],
+                    premises[meters[meter["meter_id"]]["premise_id"]]["postal_code"].rjust(5, "0"),
+                    timestamp_utc.astimezone(tz.tzlocal()),
+                    meter_value,
+                ]
             )
-            try:
-                tick()
-                location = cloud_client.get_helper(url, headers)
-                rows.append(
-                    [
-                        meter["meter_id"],
-                        meter["meter_type"],
-                        location["street_address"],
-                        location["city_town"],
-                        location["postal_code"].rjust(5, "0"),
-                        timestamp_utc.astimezone(tz.tzlocal()),
-                        meter_value,
-                    ]
-                )
-            except Exception as err:
-                print ("\nGET error:\n" + pformat(err))
             dtypes = ["t", "t", "t", "t", "t", "a", "t"]
         else:
             rows.append(
@@ -345,7 +341,7 @@ def get_gateway_data(cloud_client):
 def get_meter_usage(cloud_client):
     title = "Meter usage download {} through {}".format(cloud_client.args.start, cloud_client.args.end)
     header = ["ID", "Type", "Sum Usage"]
-    meters = __get_all_meters(cloud_client)
+    meters = __get_all_elements(cloud_client, "meter")
     rows = []
     for meter in meters:
         if cloud_client.args.meter_id and meter["id"] != cloud_client.args.meter_id:
@@ -388,7 +384,7 @@ def get_meter_usage(cloud_client):
 def get_meter_readings(cloud_client):
     title = "Meter readings download {} through {}".format(cloud_client.args.start, cloud_client.args.end)
     header = ["ID", "Type", "Created"]
-    meters = __get_all_meters(cloud_client)
+    meters = __get_all_elements(cloud_client, "meter")
     rows = []
     for meter in meters:
         if cloud_client.args.meter_id and meter["id"] != cloud_client.args.meter_id:
