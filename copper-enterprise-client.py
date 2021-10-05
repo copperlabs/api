@@ -429,6 +429,99 @@ def get_meter_readings(cloud_client):
     return title, header, rows, dtypes
 
 
+def get_grid_latest(cloud_client):
+    raise Exception('not implemented')
+
+
+def __get_grid_readings(cloud_client, start, end, timezone, premise_id=None, gateway_id=None):
+    headers = cloud_client.build_request_headers()
+    tz = pytz.timezone(timezone)
+    start = parser.parse(start)
+    end = parser.parse(end)
+    offset = int(tz.localize(start).strftime("%z")[:-2])
+    readings = None
+    for d in __daterange(start, end):
+        tick()
+        istart = datetime.combine(d, time()) - timedelta(hours=offset)
+        iend = istart + timedelta(days=1)
+        query_params = {
+            "start": istart.strftime(TIME_FMT),
+            "end": iend.strftime(TIME_FMT),
+        }
+        if premise_id != None:
+            query_params['premise_id'] = premise_id
+        if gateway_id != None:
+            query_params['gateway_id'] = gateway_id
+        url = "{url}/partner/{eid}/grid/readings?{qstr}".format(
+            url=CopperCloudClient.API_URL,
+            eid=os.environ["COPPER_ENTERPRISE_ID"],
+            qstr=urlencode(query_params)
+        )
+        try:
+            data = cloud_client.get_helper(url, headers)
+            data = sorted(data, key=lambda x:x["hw_timestamp"])
+            if not readings:
+                readings = data
+            else:
+                readings += data
+
+        except Exception as err:
+            print('GET ERROR: {}'.format(pformat(err)))
+            break
+    return readings
+
+
+def get_grid_readings(cloud_client):
+    title = "Grid readings download {} through {}".format(cloud_client.args.start, cloud_client.args.end)
+    header = ["Premise ID", "Address", "City", "Postal Code", "Gateway ID"]
+    premises = {premise["id"]: premise for premise in __get_all_elements(cloud_client, "premise")}
+    gateways = __get_all_elements(cloud_client, "gateway")
+    all_gateway_readings = __get_grid_readings(
+        cloud_client,
+        cloud_client.args.start,
+        cloud_client.args.end,
+        cloud_client.args.timezone,
+    )
+    rows = []
+    for gateway in gateways:
+        tick('g')
+        rows.append([
+            premises[gateway["premise_id"]]["id"],
+            premises[gateway["premise_id"]]["street_address"],
+            premises[gateway["premise_id"]]["city_town"],
+            premises[gateway["premise_id"]]["postal_code"].rjust(5, "0"),
+            gateway["id"]
+        ])
+        destpath = "{output_dir}/{gid}.csv".format(
+            output_dir=cloud_client.args.output_dir,
+            gid=gateway["id"]
+        )
+        if os.path.isfile(destpath):
+            if cloud_client.args.debug:
+                a = 0
+            print("\nSkipping collection for gateway {}".format(gateway["id"]))
+            continue
+        gateway_readings = [reading for reading in all_gateway_readings if reading["gateway_id"] == gateway["id"]]
+        if not gateway_readings or len(gateway_readings) == 0:
+            if cloud_client.args.debug:
+                a = 0
+            print('nothing to save for gateway {}'.format(gateway["id"]))
+            continue
+        readings = [["Gateway ID", "Timestamp", "Voltage", "Frequency"]]
+        for reading in gateway_readings:
+            rx_utc = parser.parse(reading["hw_timestamp"])
+            rx_local = rx_utc.astimezone(pytz.timezone(cloud_client.args.timezone)).replace(tzinfo=None)
+            readings.append([
+                reading["gateway_id"],
+                rx_local,
+                reading["voltage"],
+                reading["frequency"],
+            ])
+        __write_csvfile(destpath, readings)
+    dtypes = ["t", "t", "t", "t", "t"]
+    return title, header, rows, dtypes
+
+
 def get_water_meter_reversals(cloud_client):
     midnight = datetime.combine(date.today(), time())
     start = (midnight - timedelta(days=30)).strftime(TIME_FMT)
@@ -616,6 +709,17 @@ def parse_args():
 
     parser_gateway = subparser.add_parser("gateway")
     parser_gateway.set_defaults(func=get_gateway_data)
+
+    parser_grid = subparser.add_parser("grid")
+    subparser_grid = parser_grid.add_subparsers()
+    parser_grid_latest = subparser_grid.add_parser("latest")
+    parser_grid_latest.set_defaults(func=get_grid_readings)
+    parser_grid_readings = subparser_grid.add_parser("readings")
+    time_fmt = "%%Y-%%m-%%d"
+    parser_grid_readings.add_argument("start", help="Query start date, formatted as: " + time_fmt)
+    parser_grid_readings.add_argument("end", help="Query end date, formatted as: " + time_fmt)
+    parser_grid_readings.add_argument("timezone", help="Timezone (ex: 'America/Denver') for all meters to minimize hits on Copper Cloud.")
+    parser_grid_readings.set_defaults(func=get_grid_readings)
 
     return parser.parse_args()
 

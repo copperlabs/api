@@ -23,6 +23,13 @@ class UnauthorizedError(Exception):
         self.error = error
 
 
+class ClientError(Exception):
+    def __init__(self, error):
+        Exception.__init__(self, 'error = {error}'.format(
+            error=pformat(error)))
+        self.error = error
+
+
 class CopperCloudClient():
     CACHEFILE = '.copper_cloud_cache'
     CLIENT_ID = os.environ['COPPER_CLIENT_ID']
@@ -92,6 +99,8 @@ class CopperCloudClient():
         try:
             r = requests.get(url, headers=headers)
             self.__handle_response(r)
+        except ClientError as err:
+            raise err
         except Exception as err:
             if err == UnauthorizedError:
                 self.__get_token_data()
@@ -105,6 +114,8 @@ class CopperCloudClient():
         if r.status_code != 200:
             if r.status_code == 401 or r.status_code == 403:
                 raise UnauthorizedError(r)
+            elif r.status_code == 400:
+                raise ClientError(r)
             else:
                 raise Exception(r)
 
