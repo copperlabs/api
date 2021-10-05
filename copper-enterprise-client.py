@@ -101,9 +101,10 @@ def __get_meter_usage(cloud_client, meter_id, start, end, granularity, meter_cre
     if getattr(cloud_client.args, 'timezone', None):
         location = {"timezone": cloud_client.args.timezone}
     else:
-        url = "{url}/partner/meter/{mid}/location".format(
+        url = "{url}/partner/{eid}/meter/{mid}/location".format(
             url=CopperCloudClient.API_URL,
             mid=meter_id,
+            eid=os.environ["COPPER_ENTERPRISE_ID"],
         )
         location = cloud_client.get_helper(url, headers)
     tz = pytz.timezone(location["timezone"])
@@ -124,9 +125,9 @@ def __get_meter_usage(cloud_client, meter_id, start, end, granularity, meter_cre
             if cloud_client.args.debug:
                 print('skipping meter {} which does not exist on {}'.format(meter_id, d))
             continue
-        url = "{url}/partner/{pid}/meter/{mid}/usage?{qstr}".format(
+        url = "{url}/partner/{eid}/meter/{mid}/usage?{qstr}".format(
             url=CopperCloudClient.API_URL,
-            pid=os.environ["COPPER_ENTERPRISE_ID"],
+            eid=os.environ["COPPER_ENTERPRISE_ID"],
             mid=meter_id,
             qstr=urlencode(
                 {
@@ -164,9 +165,10 @@ def __get_meter_readings(cloud_client, meter_id, start, end, granularity, meter_
     if getattr(cloud_client.args, 'timezone', None):
         location = {"timezone": cloud_client.args.timezone}
     else:
-        url = "{url}/partner/meter/{mid}/location".format(
+        url = "{url}/partner/{eid}/meter/{mid}/location".format(
             url=CopperCloudClient.API_URL,
             mid=meter_id,
+            eid=os.environ["COPPER_ENTERPRISE_ID"],
         )
         location = cloud_client.get_helper(url, headers)
     tz = pytz.timezone(location["timezone"])
@@ -183,9 +185,9 @@ def __get_meter_readings(cloud_client, meter_id, start, end, granularity, meter_
             if cloud_client.args.debug:
                 print('skipping meter {} which does not exist on {}'.format(meter_id, d))
             continue
-        url = "{url}/partner/{pid}/meter/{mid}/readings?{qstr}".format(
+        url = "{url}/partner/{eid}/meter/{mid}/readings?{qstr}".format(
             url=CopperCloudClient.API_URL,
-            pid=os.environ["COPPER_ENTERPRISE_ID"],
+            eid=os.environ["COPPER_ENTERPRISE_ID"],
             mid=meter_id,
             qstr=urlencode({
                 "start": istart.strftime(TIME_FMT),
@@ -232,8 +234,9 @@ def get_bulk_data(cloud_client):
         meter_value = format(meter["value"], ".3f")
         timestamp_utc = parser.parse(meter["timestamp"])
         if cloud_client.args.detailed:
-            url = "{url}/partner/meter/{id}/location".format(
-                url=CopperCloudClient.API_URL, id=meter["meter_id"]
+            url = "{url}/partner/{eid}/meter/{mid}/location".format(
+                url=CopperCloudClient.API_URL, mid=meter["meter_id"],
+                eid=os.environ["COPPER_ENTERPRISE_ID"],
             )
             try:
                 tick()
@@ -452,8 +455,9 @@ def get_water_meter_reversals(cloud_client):
             break
         num -= 1
         tick()
-        url = "{url}/partner/meter/{id}/location".format(
-            url=CopperCloudClient.API_URL, id=meter["meter_id"]
+        url = "{url}/partner/{eid}/meter/{mid}/location".format(
+            url=CopperCloudClient.API_URL, mid=meter["meter_id"],
+            eid=os.environ["COPPER_ENTERPRISE_ID"],
         )
         location = cloud_client.get_helper(url, headers)
         if location["street_address"] not in prems.keys():
