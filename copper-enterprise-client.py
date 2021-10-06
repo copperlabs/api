@@ -588,6 +588,100 @@ def get_water_meter_reversals(cloud_client):
     return title, header, rows, dtypes
 
 
+def strip_unicode_chars(text):
+    return text.encode('ascii', 'ignore') if text else ''
+
+
+def __build_row(type, g, m, p):
+    row = []
+    try:
+        row = [
+            p['id'],
+            strip_unicode_chars(p['name']),
+            p['postal_code'],
+            m["premise_id"] == g["premise_id"],
+            m['id'],
+            m['state'],
+            g['id'],
+            g['state'],
+            g['firmware_version'],
+            g['last_heard'],
+            g['uptime_max'],
+            g['boot_count'],
+            g['cnct_count'],
+        ]
+    except Exception as err:
+        print('Exception adding {type}:'.format(type=type))
+        print(err)
+        pprint(m.keys())
+        pprint(g.keys())
+        raise err
+    return row
+
+
+def get_health_data(cloud_client):
+    headers = cloud_client.build_request_headers()
+    title = 'Unhealthy Premises'
+    header = [
+        'Premise ID',
+        'Premise Name',
+        'Premise Postal',
+        'Premise ID Match',
+        'Meter ID',
+        'Meter State',
+        'Gateway ID',
+        'Gateway State',
+        'Gateway Firmware',
+        'Gateway Last Heard',
+        'Gateway 48hr Max Uptime minutes',
+        'Gateway 24hr BOOT count',
+        'Gateway 24hr CNCT count'
+    ]
+    rows = []
+    meters = {meter["id"]: meter for meter in __get_all_elements(cloud_client, "meter")}
+    gateways = {gateway["id"]: gateway for gateway in __get_all_elements(cloud_client, "gateway")}
+    premises = {premise["id"]: premise for premise in __get_all_elements(cloud_client, "premise")}
+    gateway_ids = []
+    for m in meters.values():
+        #if not m["premise_id"] or not m["tracked_by"]:
+        if m["state"] not in ['degraded', 'disconnected'] or not m["premise_id"]:
+            continue
+        tick('m')
+        tracked_by = m['tracked_by'] if m['tracked_by'] else []
+        for gw in tracked_by:
+            tick('.')
+            g = gateways.get(gw, None)
+            if not g:
+                g = {
+                    'id': gw,
+                    'premise_id': 'unknown',
+                    'state': 'unknown',
+                    'firmware_version': 'unknown',
+                    'last_heard': 'unknown',
+                    'uptime_max': 'unknown',
+                    'boot_count': 'unknown',
+                    'cnct_count': 'unknown',
+                    }
+            rows.append(__build_row('meter', g, m, premises[m["premise_id"]]))
+            if g['id'] not in gateway_ids:
+                gateway_ids.append(g['id'])
+    for g in gateways.values():
+        if not g["premise_id"] or g["state"] not in ['down', 'disconnected', 'error']:
+            continue
+        tick('g')
+        tracking = g['tracking'] if g['tracking'] else []
+        for met in tracking:
+            if g['id'] in gateway_ids:
+                continue
+            tick('.')
+            m = meters.get(met, None)
+            if not m:
+                m = {'id': met, 'premise_id': 'unknown', 'state': 'unknown'}
+            rows.append(__build_row('gateway', g, m, premises[g["premise_id"]]))
+    dtypes = ['t'] * len(header)
+    rows.sort(key = lambda row: row[0])
+    return title, header, rows, dtypes
+
 def parse_args():
     parser = argparse.ArgumentParser(
         add_help=True,
@@ -720,6 +814,9 @@ def parse_args():
     parser_grid_readings.add_argument("end", help="Query end date, formatted as: " + time_fmt)
     parser_grid_readings.add_argument("timezone", help="Timezone (ex: 'America/Denver') for all meters to minimize hits on Copper Cloud.")
     parser_grid_readings.set_defaults(func=get_grid_readings)
+
+    parser_health = subparser.add_parser("health")
+    parser_health.set_defaults(func=get_health_data)
 
     return parser.parse_args()
 
