@@ -1,6 +1,6 @@
 .*cache
 venv*
-.envrc
+.envrc*
 generated
 *.pyc
 .DS_Store

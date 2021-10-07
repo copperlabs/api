@@ -37,7 +37,6 @@ class CopperEnterpriseClient():
         table.set_deco(Texttable.HEADER)
         table.set_cols_dtype(dtypes)
         row_align = ["l"] * len(header)
-        row_align[-1] = "r"
         table.set_header_align(row_align)
         table.set_cols_align(row_align)
         rows.insert(0, header)
@@ -47,11 +46,17 @@ class CopperEnterpriseClient():
             print("\n{title} (rows={num}):".format(title=title, num=len(rows) - 1))
             print (table.draw() + "\n")
 
+        if self.args.output_dir and not os.path.exists(self.args.output_dir):
+            os.makedirs(self.args.output_dir) 
+
         if self.args.csv_output_file:
             output_file = self.args.csv_output_file
-            if not output_file.startswith('generated/'):
-                output_file = os.path.join(self.args.output_dir, self.args.csv_output_file)
-            self.client.write_csvfile(output_file, rows, mode="a")
+            if self.args.output_dir:
+                output_file = os.path.join(self.args.output_dir, output_file)
+            dirname = os.path.dirname(output_file)
+            if dirname and not os.path.exists(dirname):
+                os.makedirs(dirname) 
+            self.write_csvfile(output_file, rows, mode="w")
 
     def _make_bulk_url(self, limit=1000):
         return "{url}/partner/{id}/bulk?limit={limit}".format(
@@ -286,12 +291,15 @@ class CopperEnterpriseClient():
         title = "Premise download"
         header = [
             "ID",
+            "Created",
             "Address",
             "Suite/Apt",
             "City",
             "Postal Code",
             "County",
             "State",
+            "Tags",
+            "Email",
         ]
         headers = self.cloud_client.build_request_headers()
         url =  "{url}/partner/{id}/premise".format(
@@ -299,6 +307,7 @@ class CopperEnterpriseClient():
             id=self.args.enterprise_id,
         )
         prems = self.cloud_client.get_helper(url, headers)
+        prems = sorted(prems, key=lambda x:x["created_at"])
         rows = []
         print (
             "Building information for {num} premises on {now}...".format(
@@ -306,15 +315,18 @@ class CopperEnterpriseClient():
             )
         )
         for p in prems:
+            emails = ';'.join([u['email'] for u in p.get('user_list', [])]) 
             rows.append([
                 p["id"],
-                p["street_address"].encode("utf8"),
+                p["created_at"],
+                p["street_address"].encode("utf8").decode('ascii'),
                 p["suite_apartment_unit"],
                 p["city_town"],
                 p["postal_code"],
                 p["county_district"],
                 p["state_region"],
-
+                p["tags"],
+                emails,
             ])
         dtypes = ["a"] * len(header)
         return title, header, rows, dtypes
@@ -598,93 +610,102 @@ class CopperEnterpriseClient():
     def strip_unicode_chars(self, text):
         return text.encode('ascii', 'ignore') if text else ''
 
-    def _build_row(self, type, g, m, p):
+    def _state_to_symbol(self, state):
+        switcher = {
+            "active": ".",
+            "connected": ".",
+            "degraded": "/",
+            "disconnected": "X",
+            "down": "X",
+            # don't care
+            "skip": " ",
+        }
+        return switcher.get(state, "?")
+
+    def _fill_element_states(self, starting_date, timezone, days_history, state, state_changes):
+        state_changes = state_changes if state_changes != None else []
+        tz = pytz.timezone(timezone)
+        starting_date = parser.parse(starting_date).astimezone(tz).replace(tzinfo=None)
         row = []
-        try:
-            row = [
-                p['id'],
-                self.strip_unicode_chars(p['name']),
-                p['postal_code'],
-                m["premise_id"] == g["premise_id"],
-                m['id'],
-                m['state'],
-                g['id'],
-                g['state'],
-                g['firmware_version'],
-                g['last_heard'],
-                g['uptime_max'],
-                g['boot_count'],
-                g['cnct_count'],
-            ]
-        except Exception as err:
-            print('Exception adding {type}:'.format(type=type))
-            print(err)
-            pprint(m.keys())
-            pprint(g.keys())
-            raise err
+        for change in state_changes:
+            change["timestamp"] = parser.parse(change["timestamp"]).astimezone(tz).replace(tzinfo=None)
+        for i in range(days_history):
+            day = date.today() - timedelta(days=i)
+            if starting_date.date() > day:
+                row += self._state_to_symbol("skip")
+                continue
+            next_state = state
+            last_change = first_change = None
+            for change in state_changes:
+                change_day = change["timestamp"].date()
+                if change_day == day:
+                    if not last_change:
+                        last_change = change
+                    if not first_change:
+                        first_change = change
+                    if last_change and change["timestamp"] > last_change["timestamp"]:
+                        last_change = change
+                    if first_change and change["timestamp"] < first_change["timestamp"]:
+                        first_change = change
+                    next_state = first_change["from"]
+                    down = ['down', 'disconnected']
+                    up = ['active', 'connected']
+                    if not ((state in down and next_state in down) or (state in up and next_state in up)):
+                        # filter out equivalent states from the end-user perspective
+                        state = "change"
+            row += self._state_to_symbol(state)
+            state = next_state
         return row
 
     def get_health_data(self):
-        headers = self.cloud_client.build_request_headers()
-        title = 'Unhealthy Premises'
+        days_history = 7
+        title = 'Premise Health'
         header = [
             'Premise ID',
-            'Premise Name',
-            'Premise Postal',
-            'Premise ID Match',
-            'Meter ID',
-            'Meter State',
-            'Gateway ID',
-            'Gateway State',
-            'Gateway Firmware',
-            'Gateway Last Heard',
-            'Gateway 48hr Max Uptime minutes',
-            'Gateway 24hr BOOT count',
-            'Gateway 24hr CNCT count'
+            'Address',
+            'Type',
+            'ID',
+            'State',
         ]
+        self.tick('\\')
+        premises = sorted(self._get_all_elements("premise"), key=lambda x : x["created_at"])
+        self.tick('_')
+        gateways = self._get_all_elements("gateway")
+        self.tick('/')
+        meters = self._get_all_elements("meter")
+
         rows = []
-        meters = {meter["id"]: meter for meter in self._get_all_elements("meter")}
-        gateways = {gateway["id"]: gateway for gateway in self._get_all_elements("gateway")}
-        premises = {premise["id"]: premise for premise in self._get_all_elements("premise")}
-        gateway_ids = []
-        for m in meters.values():
-            #if not m["premise_id"] or not m["tracked_by"]:
-            if m["state"] not in ['degraded', 'disconnected'] or not m["premise_id"]:
-                continue
-            self.tick('m')
-            tracked_by = m['tracked_by'] if m['tracked_by'] else []
-            for gw in tracked_by:
-                self.tick('.')
-                g = gateways.get(gw, None)
-                if not g:
-                    g = {
-                        'id': gw,
-                        'premise_id': 'unknown',
-                        'state': 'unknown',
-                        'firmware_version': 'unknown',
-                        'last_heard': 'unknown',
-                        'uptime_max': 'unknown',
-                        'boot_count': 'unknown',
-                        'cnct_count': 'unknown',
-                        }
-                rows.append(self._build_row('meter', g, m, premises[m["premise_id"]]))
-                if g['id'] not in gateway_ids:
-                    gateway_ids.append(g['id'])
-        for g in gateways.values():
-            if not g["premise_id"] or g["state"] not in ['down', 'disconnected', 'error']:
-                continue
-            self.tick('g')
-            tracking = g['tracking'] if g['tracking'] else []
-            for met in tracking:
-                if g['id'] in gateway_ids:
-                    continue
-                self.tick('.')
-                m = meters.get(met, None)
-                if not m:
-                    m = {'id': met, 'premise_id': 'unknown', 'state': 'unknown'}
-                rows.append(self._build_row('gateway', g, m, premises[g["premise_id"]]))
+        for p in premises:
+            self.tick('p')
+            #  Build meter status for this prem
+            for m in meters:
+                if m['premise_id'] != p['id']: continue
+                self.tick('m')
+                row = [
+                    p['id'],
+                    p['street_address'],
+                    "{type} meter".format(type=m["type"]),
+                    m['id'],
+                    m['state'],
+                ]
+                rows.append(row + self._fill_element_states(p["created_at"], p['timezone'], days_history, m["state"], m['seven_day_history']))
+
+            # Build gateway status for this prem
+            for g in gateways:
+                if g['premise_id'] != p['id']: continue
+                self.tick('g')
+                row = [
+                    p['id'],
+                    p['street_address'],
+                    "gateway",
+                    g['id'],
+                    g['state'],
+                ]
+                rows.append(row + self._fill_element_states(p["created_at"], p['timezone'], days_history, g["state"], g['seven_day_history']))
+
+        for i in range(days_history):
+            header.append((date.today() - timedelta(days=i)).strftime("%m/%d"))
         dtypes = ['t'] * len(header)
-        rows.sort(key = lambda row: row[0])
         return title, header, rows, dtypes
 
     def parse_args(self):
@@ -701,7 +722,7 @@ class CopperEnterpriseClient():
         parser.add_argument(
             "--output-dir",
             dest="output_dir",
-            default='generated',
+            default=None,
             help="Write output to specified directory.",
         )
         parser.add_argument(
