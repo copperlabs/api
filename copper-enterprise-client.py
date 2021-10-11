@@ -28,9 +28,12 @@ class CopperEnterpriseClient():
         self.time_fmt = "%Y-%m-%dT%H:%M:%SZ"
         self.parse_args()
         # Walk through user login (authorization, access_token grant, etc.)
-        self.cloud_client = CopperCloudClient(self.args, self._make_bulk_url(limit=1))
+        self.cloud_client = CopperCloudClient(self.args, self._make_next_url("bulk", limit=1))
 
     def run(self):
+        if self.args.output_dir and not os.path.exists(self.args.output_dir):
+            os.makedirs(self.args.output_dir) 
+
         title, header, rows, dtypes = self.args.func(self)
 
         table = Texttable(max_width=0)
@@ -46,9 +49,6 @@ class CopperEnterpriseClient():
             print("\n{title} (rows={num}):".format(title=title, num=len(rows) - 1))
             print (table.draw() + "\n")
 
-        if self.args.output_dir and not os.path.exists(self.args.output_dir):
-            os.makedirs(self.args.output_dir) 
-
         if self.args.csv_output_file:
             output_file = self.args.csv_output_file
             if self.args.output_dir:
@@ -58,10 +58,11 @@ class CopperEnterpriseClient():
                 os.makedirs(dirname) 
             self.write_csvfile(output_file, rows, mode="w")
 
-    def _make_bulk_url(self, limit=1000):
-        return "{url}/partner/{id}/bulk?limit={limit}".format(
+    def _make_next_url(self, endpoint, limit=1000):
+        return "{url}/partner/{id}/{endpoint}?limit={limit}".format(
             url=CopperCloudClient.API_URL,
             id=self.args.enterprise_id,
+            endpoint=endpoint,
             limit=limit,
         )
 
@@ -83,23 +84,23 @@ class CopperEnterpriseClient():
             writer = csv.writer(csvfile)
             writer.writerows(rows)
 
-    def _get_all_meters_bulk(self):
+    def _get_all_elements_next(self, endpoint):
         headers = self.cloud_client.build_request_headers()
-        meters = []
-        more_meters = True
-        next_url = self._make_bulk_url()
+        elements = []
+        more_elements = True
+        next_url = self._make_next_url(endpoint)
         try:
-            while more_meters:
+            while more_elements:
                 resp = self.cloud_client.get_helper(next_url, headers)
-                meters += resp["results"]
-                more_meters = resp.get("next", None)
-                if more_meters:
+                elements += resp["results"]
+                more_elements = resp.get("next", None)
+                if more_elements:
                     next_url = "{url}{uri}".format(
                         url=CopperCloudClient.BASE_API_URL, uri=resp["next"]
                     )
         except Exception as err:
             print ("\nGET error:\n" + pformat(err))
-        return meters
+        return elements
 
     def _get_all_elements(self, endpoint):
         headers = self.cloud_client.build_request_headers()
@@ -140,7 +141,7 @@ class CopperEnterpriseClient():
         offset = int(tz.localize(start).strftime("%z")[:-2])
         usage = None
         meter_created = parser.parse(meter_created_at).astimezone(tz).replace(tzinfo=None) if meter_created_at else None
-        if start < meter_created:
+        if meter_created and start < meter_created:
             start = meter_created
         for d in self._daterange(start, end, step):
             self.tick()
@@ -178,7 +179,9 @@ class CopperEnterpriseClient():
                     }
                 else:
                     usage["sum_usage"] += data["sum_usage"]
-                    if len (usage["results"]):
+                    if (len(data["results"]) and
+                        d != end and
+                        usage["results"][-1]["time"] == data["results"][0]["time"]):
                         del usage["results"][-1]
                     usage["results"] += data["results"]
 
@@ -247,7 +250,7 @@ class CopperEnterpriseClient():
             ]
         else:
             header = ["ID", "Type", "Latest Timestamp", "Latest Value"]
-        bulk_meters = self._get_all_meters_bulk()
+        bulk_meters = self._get_all_elements_next("bulk")
         meters = {meter["id"]: meter for meter in self._get_all_elements("meter")}
         premises = {}
         if self.args.detailed:
@@ -367,6 +370,9 @@ class CopperEnterpriseClient():
         return title, header, rows, dtypes
 
     def get_meter_usage(self):
+        if not self.args.output_dir:
+            print('Must add the top-level --output-dir option when running this command')
+            exit(1)
         title = "Meter usage download {} through {}".format(self.args.start, self.args.end)
         header = ["ID", "Type", "Sum Usage"]
         meters = self._get_all_elements("meter")
@@ -408,6 +414,9 @@ class CopperEnterpriseClient():
         return title, header, rows, dtypes
 
     def get_meter_readings(self):
+        if not self.args.output_dir:
+            print('Must add the top-level --output-dir option when running this command')
+            exit(1)
         title = "Meter readings download {} through {}".format(self.args.start, self.args.end)
         header = ["ID", "Type", "Created"]
         meters = self._get_all_elements("meter")
@@ -454,7 +463,28 @@ class CopperEnterpriseClient():
         return title, header, rows, dtypes
 
     def get_grid_latest(self):
-        raise Exception('not implemented')
+        title = "Grid latest download"
+        header = ["Premise ID", "Address", "City", "Postal Code", "Gateway ID", "Timestamp", "Voltage", "Frequency"]
+        premises = {premise["id"]: premise for premise in self._get_all_elements("premise")}
+        results = self._get_all_elements_next("grid/latest")
+        rows = []
+
+        for result in results:
+            rx_utc = parser.parse(result["hw_timestamp"])
+            rx_local = rx_utc.astimezone(pytz.timezone(premises[result["premise_id"]]["timezone"])).replace(tzinfo=None)
+            self.tick()
+            rows.append([
+                premises[result["premise_id"]]["id"],
+                premises[result["premise_id"]]["street_address"],
+                premises[result["premise_id"]]["city_town"],
+                premises[result["premise_id"]]["postal_code"].rjust(5, "0"),
+                result["gateway_id"],
+                rx_local,
+                result["voltage"],
+                result["frequency"],
+            ])
+        dtypes = ["t", "t", "t", "t", "t", "t", "a", "a"]
+        return title, header, rows, dtypes
 
     def _get_grid_readings(self, start, end, timezone, premise_id=None, gateway_id=None):
         headers = self.cloud_client.build_request_headers()
@@ -462,7 +492,7 @@ class CopperEnterpriseClient():
         start = parser.parse(start)
         end = parser.parse(end)
         offset = int(tz.localize(start).strftime("%z")[:-2])
-        readings = None
+        readings = []
         for d in self._daterange(start, end):
             self.tick()
             istart = datetime.combine(d, time()) - timedelta(hours=offset)
@@ -483,10 +513,7 @@ class CopperEnterpriseClient():
             try:
                 data = self.cloud_client.get_helper(url, headers)
                 data = sorted(data, key=lambda x:x["hw_timestamp"])
-                if not readings:
-                    readings = data
-                else:
-                    readings += data
+                readings += data
 
             except Exception as err:
                 print('GET ERROR: {}'.format(pformat(err)))
@@ -494,6 +521,9 @@ class CopperEnterpriseClient():
         return readings
 
     def get_grid_readings(self):
+        if not self.args.output_dir:
+            print('Must add the top-level --output-dir option when running this command')
+            exit(1)
         title = "Grid readings download {} through {}".format(self.args.start, self.args.end)
         header = ["Premise ID", "Address", "City", "Postal Code", "Gateway ID"]
         premises = {premise["id"]: premise for premise in self._get_all_elements("premise")}
@@ -504,6 +534,13 @@ class CopperEnterpriseClient():
             self.args.timezone,
         )
         rows = []
+        gateway_readings = {}
+        # This could be a huge amoun of data. Sort through it once at the cost of memory.
+        for reading in all_gateway_readings:
+            if reading["gateway_id"] not in gateway_readings.keys():
+                gateway_readings[reading["gateway_id"]] = []
+            gateway_readings[reading["gateway_id"]].append(reading)
+            
         for gateway in gateways:
             self.tick('g')
             rows.append([
@@ -522,34 +559,34 @@ class CopperEnterpriseClient():
                     a = 0
                 print("\nSkipping collection for gateway {}".format(gateway["id"]))
                 continue
-            gateway_readings = [reading for reading in all_gateway_readings if reading["gateway_id"] == gateway["id"]]
-            if not gateway_readings or len(gateway_readings) == 0:
+            readings = gateway_readings.get(gateway["id"], [])
+            if len(readings) == 0:
                 if self.args.debug:
-                    a = 0
-                print('nothing to save for gateway {}'.format(gateway["id"]))
+                    print('nothing to save for gateway {}'.format(gateway["id"]))
                 continue
-            readings = [["Gateway ID", "Timestamp", "Voltage", "Frequency"]]
-            for reading in gateway_readings:
+            data = [["Gateway ID", "Timestamp", "Voltage", "Frequency"]]
+            for reading in readings:
                 rx_utc = parser.parse(reading["hw_timestamp"])
                 rx_local = rx_utc.astimezone(pytz.timezone(self.args.timezone)).replace(tzinfo=None)
-                readings.append([
+                data.append([
                     reading["gateway_id"],
                     rx_local,
                     reading["voltage"],
                     reading["frequency"],
                 ])
-            self.write_csvfile(destpath, readings)
+            self.write_csvfile(destpath, data)
         dtypes = ["t", "t", "t", "t", "t"]
         return title, header, rows, dtypes
 
     def get_water_meter_reversals(self):
         midnight = datetime.combine(date.today(), time())
-        start = (midnight - timedelta(days=30)).strftime(self.time_fmt)
-        end = midnight.strftime(self.time_fmt)
+        time_fmt = "%Y-%m-%d"
+        start = (midnight - timedelta(days=30)).strftime(time_fmt)
+        end = midnight.strftime(time_fmt)
         title = "Suspect water meter reversals"
         header = ["Address", "Indoor Usage", "Outdoor Usage"]
         headers = self.cloud_client.build_request_headers()
-        meters = self._get_all_meters_bulk()
+        meters = self._get_all_elements_next("bulk")
         rows = []
         prems = {}
         num = (
@@ -582,11 +619,11 @@ class CopperEnterpriseClient():
             outdoor = {"sum_usage": None}
             if "water_indoor" in p.keys():
                 indoor = self._get_meter_usage(
-                    p["water_indoor"]["meter_id"], start, end, "day"
+                    p["water_indoor"]["meter_id"], start, end, "day", step=30
                 )
             if "water_outdoor" in p.keys():
                 outdoor = self._get_meter_usage(
-                    p["water_outdoor"]["meter_id"], start, end, "day"
+                    p["water_outdoor"]["meter_id"], start, end, "day", step=30
                 )
             add_the_row = False
             if not indoor["sum_usage"] or not outdoor["sum_usage"]:
@@ -839,7 +876,7 @@ class CopperEnterpriseClient():
         parser_grid = subparser.add_parser("grid")
         subparser_grid = parser_grid.add_subparsers()
         parser_grid_latest = subparser_grid.add_parser("latest")
-        parser_grid_latest.set_defaults(func=CopperEnterpriseClient.get_grid_readings)
+        parser_grid_latest.set_defaults(func=CopperEnterpriseClient.get_grid_latest)
         parser_grid_readings = subparser_grid.add_parser("readings")
         time_fmt = "%%Y-%%m-%%d"
         parser_grid_readings.add_argument("start", help="Query start date, formatted as: " + time_fmt)
