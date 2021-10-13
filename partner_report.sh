@@ -15,7 +15,7 @@ num_prems=`python copper-enterprise-client.py --csv-output-file ${prem_report} p
 
 health_report=${reports_dir}/health_history.${handle}.${report_date}.csv
 echo "Compiling health history for ${handle}"
-python copper-enterprise-client.py --csv-output-file ${health_report} health
+python copper-enterprise-client.py --csv-output-file ${health_report} report health
 
 echo "prems created:                ${num_prems}"
 echo "total gateways:               `cat ${health_report} | grep -c gateway`"

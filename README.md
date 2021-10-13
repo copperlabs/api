@@ -118,3 +118,19 @@ ex:
 
 ##### Note for interpreting CSV output files
 The CSV output file specific on the command-line contains summary information for premises, meters and sum usage between the start and end dates. Per-meter usage returns an hourly, interpolated timeseries and is written into a set of files; on per meter.
+
+#### Health report:
+Download a 7-day history of all gateways and meter.
+```
+python copper-enterprise-client.py report monthly 2021-09
+```
+
+#### Monthly report:
+Download number of prems, meters and aggregate usage split out per meter type for a 1-month period.
+```
+python copper-enterprise-client.py report health
+```
+Or use the bash helper script to bundle with a detailed premise listing into a zip archive.
+```
+./partner_report.sh ${handle}  # ${handle} is some string to name the report bundle
+```

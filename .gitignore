@@ -4,3 +4,4 @@ venv*
 generated
 *.pyc
 .DS_Store
+.vscode
