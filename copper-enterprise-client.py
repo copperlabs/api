@@ -28,14 +28,14 @@ class CopperEnterpriseClient():
     DATE_FMT = "%Y-%m-%d"
     HELP_DATE_FMT = "%%Y-%%m-%%d"
     METER_TYPE_UOM = {
-        'power':         'kwh',
-        'power_net':     'kwh',
-        'power_gen':     'kwh',
-        'power_sub':     'kwh',
-        'gas':           'ccf',
-        'water':         'gal',
-        'water_indoor':  'gal',
-        'water_outdoor': 'gal',
+        "power":         "kwh",
+        "power_net":     "kwh",
+        "power_gen":     "kwh",
+        "power_sub":     "kwh",
+        "gas":           "ccf",
+        "water":         "gal",
+        "water_indoor":  "gal",
+        "water_outdoor": "gal",
     }
 
     def __init__(self):
@@ -144,7 +144,7 @@ class CopperEnterpriseClient():
 
     def _get_meter_usage(self, meter_id, start, end, granularity, meter_created_at=None, step=1, timezone=None):
         headers = self.cloud_client.build_request_headers()
-        timezone = getattr(self.args, 'timezone', timezone)
+        timezone = getattr(self.args, "timezone", timezone)
         if timezone:
             location = {"timezone": timezone}
         else:
@@ -170,7 +170,7 @@ class CopperEnterpriseClient():
                 iend = end
             if meter_created and iend < meter_created:
                 if self.args.debug:
-                    print('skipping meter {} which does not exist on {}'.format(meter_id, d))
+                    print("skipping meter {} which does not exist on {}".format(meter_id, d))
                 continue
             url = "{url}/partner/{eid}/meter/{mid}/usage?{qstr}".format(
                 url=CopperCloudClient.API_URL,
@@ -204,12 +204,12 @@ class CopperEnterpriseClient():
                     usage["results"] += data["results"]
 
             except Exception as err:
-                print('GET ERROR: {}'.format(pformat(err)))
+                print("GET ERROR: {}".format(pformat(err)))
         return usage
 
     def _get_meter_readings(self, meter_id, start, end, granularity, meter_created_at=None):
         headers = self.cloud_client.build_request_headers()
-        if getattr(self.args, 'timezone', None):
+        if getattr(self.args, "timezone", None):
             location = {"timezone": self.args.timezone}
         else:
             url = "{url}/partner/{eid}/meter/{mid}/location".format(
@@ -230,7 +230,7 @@ class CopperEnterpriseClient():
             iend = istart + timedelta(days=1)
             if meter_created and istart < meter_created:
                 if self.args.debug:
-                    print('skipping meter {} which does not exist on {}'.format(meter_id, d))
+                    print("skipping meter {} which does not exist on {}".format(meter_id, d))
                 continue
             url = "{url}/partner/{eid}/meter/{mid}/readings?{qstr}".format(
                 url=CopperCloudClient.API_URL,
@@ -250,7 +250,7 @@ class CopperEnterpriseClient():
                     readings["results"] += data["results"]
 
             except Exception as err:
-                print('GET ERROR: {}'.format(pformat(err)))
+                print("GET ERROR: {}".format(pformat(err)))
                 break
         return readings
 
@@ -336,11 +336,11 @@ class CopperEnterpriseClient():
             )
         )
         for p in prems:
-            emails = ';'.join([u['email'] for u in p.get('user_list', [])]) 
+            emails = ";".join([u["email"] for u in p.get("user_list", [])]) 
             rows.append([
                 p["id"],
                 p["created_at"],
-                p["street_address"].encode("utf8").decode('ascii'),
+                p["street_address"].encode("utf8").decode("ascii"),
                 p["suite_apartment_unit"],
                 p["city_town"],
                 p["postal_code"],
@@ -389,7 +389,7 @@ class CopperEnterpriseClient():
 
     def get_meter_usage(self):
         if not self.args.output_dir:
-            print('Must add the top-level --output-dir option when running this command')
+            print("Must add the top-level --output-dir option when running this command")
             exit(1)
         title = "Meter usage download {} through {}".format(self.args.start, self.args.end)
         header = ["ID", "Type", "Sum Usage"]
@@ -414,7 +414,7 @@ class CopperEnterpriseClient():
             )
             if not usage or not usage["sum_usage"]:
                 if self.args.debug:
-                    print('nothing to save for meter {}'.format(meter["id"]))
+                    print("nothing to save for meter {}".format(meter["id"]))
                 continue
             rows.append(
                 [usage["meter_id"], usage["meter_type"], usage["sum_usage"],]
@@ -433,7 +433,7 @@ class CopperEnterpriseClient():
 
     def get_meter_readings(self):
         if not self.args.output_dir:
-            print('Must add the top-level --output-dir option when running this command')
+            print("Must add the top-level --output-dir option when running this command")
             exit(1)
         title = "Meter readings download {} through {}".format(self.args.start, self.args.end)
         header = ["ID", "Type", "Created"]
@@ -463,10 +463,10 @@ class CopperEnterpriseClient():
             )
             if not readings or not readings["results"]:
                 if self.args.debug:
-                    print('nothing to save for meter {}'.format(meter["id"]))
+                    print("nothing to save for meter {}".format(meter["id"]))
                 continue
             results = [["ID", "Type", "Timestamp", "Actual ({})".format(meter["uom"]), "Normalized (kwh)"]]
-            for result in readings['results']:
+            for result in readings["results"]:
                 rx_utc = parser.parse(result["time"])
                 rx_local = rx_utc.astimezone(pytz.timezone(self.args.timezone)).replace(tzinfo=None)
                 results.append([
@@ -520,9 +520,9 @@ class CopperEnterpriseClient():
                 "end": iend.strftime(CopperEnterpriseClient.DATETIME_FMT),
             }
             if premise_id != None:
-                query_params['premise_id'] = premise_id
+                query_params["premise_id"] = premise_id
             if gateway_id != None:
-                query_params['gateway_id'] = gateway_id
+                query_params["gateway_id"] = gateway_id
             url = "{url}/partner/{eid}/grid/readings?{qstr}".format(
                 url=CopperCloudClient.API_URL,
                 eid=self.args.enterprise_id,
@@ -534,13 +534,13 @@ class CopperEnterpriseClient():
                 readings += data
 
             except Exception as err:
-                print('GET ERROR: {}'.format(pformat(err)))
+                print("GET ERROR: {}".format(pformat(err)))
                 break
         return readings
 
     def get_grid_readings(self):
         if not self.args.output_dir:
-            print('Must add the top-level --output-dir option when running this command')
+            print("Must add the top-level --output-dir option when running this command")
             exit(1)
         title = "Grid readings download {} through {}".format(self.args.start, self.args.end)
         header = ["Premise ID", "Address", "City", "Postal Code", "Gateway ID"]
@@ -560,7 +560,7 @@ class CopperEnterpriseClient():
             gateway_readings[reading["gateway_id"]].append(reading)
             
         for gateway in gateways:
-            self.tick('g')
+            self.tick("g")
             rows.append([
                 premises[gateway["premise_id"]]["id"],
                 premises[gateway["premise_id"]]["street_address"],
@@ -580,7 +580,7 @@ class CopperEnterpriseClient():
             readings = gateway_readings.get(gateway["id"], [])
             if len(readings) == 0:
                 if self.args.debug:
-                    print('nothing to save for gateway {}'.format(gateway["id"]))
+                    print("nothing to save for gateway {}".format(gateway["id"]))
                 continue
             data = [["Gateway ID", "Timestamp", "Voltage", "Frequency"]]
             for reading in readings:
@@ -662,7 +662,7 @@ class CopperEnterpriseClient():
         return title, header, rows, dtypes
 
     def strip_unicode_chars(self, text):
-        return text.encode('ascii', 'ignore') if text else ''
+        return text.encode("ascii", "ignore") if text else ""
 
     def _state_to_symbol(self, state):
         switcher = {
@@ -702,8 +702,8 @@ class CopperEnterpriseClient():
                     if first_change and change["timestamp"] < first_change["timestamp"]:
                         first_change = change
                     next_state = first_change["from"]
-                    down = ['down', 'disconnected']
-                    up = ['active', 'connected']
+                    down = ["down", "disconnected"]
+                    up = ["active", "connected"]
                     if not ((state in down and next_state in down) or (state in up and next_state in up)):
                         # filter out equivalent states from the end-user perspective
                         state = "change"
@@ -713,65 +713,65 @@ class CopperEnterpriseClient():
 
     def get_health_data(self):
         days_history = 7
-        title = 'Premise Health'
+        title = "Premise Health"
         header = [
-            'Premise ID',
-            'Address',
-            'Type',
-            'ID',
-            'State',
+            "Premise ID",
+            "Address",
+            "Type",
+            "ID",
+            "State",
         ]
-        self.tick('\\')
+        self.tick("\\")
         premises = sorted(self._get_all_elements("premise"), key=lambda x : x["created_at"])
-        self.tick('_')
+        self.tick("_")
         gateways = self._get_all_elements("gateway")
-        self.tick('/')
+        self.tick("/")
         meters = self._get_all_elements("meter")
 
         rows = []
         for p in premises:
-            self.tick('p')
+            self.tick("p")
             #  Build meter status for this prem
             for m in meters:
-                if m['premise_id'] != p['id']: continue
-                self.tick('m')
+                if m["premise_id"] != p["id"]: continue
+                self.tick("m")
                 row = [
-                    p['id'],
-                    p['street_address'],
+                    p["id"],
+                    p["street_address"],
                     "{type} meter".format(type=m["type"]),
-                    m['id'],
-                    m['state'],
+                    m["id"],
+                    m["state"],
                 ]
-                rows.append(row + self._fill_element_states(p["created_at"], p['timezone'], days_history, m["state"], m['seven_day_history']))
+                rows.append(row + self._fill_element_states(p["created_at"], p["timezone"], days_history, m["state"], m["seven_day_history"]))
 
             # Build gateway status for this prem
             for g in gateways:
-                if g['premise_id'] != p['id']: continue
-                self.tick('g')
+                if g["premise_id"] != p["id"]: continue
+                self.tick("g")
                 row = [
-                    p['id'],
-                    p['street_address'],
+                    p["id"],
+                    p["street_address"],
                     "gateway",
-                    g['id'],
-                    g['state'],
+                    g["id"],
+                    g["state"],
                 ]
-                rows.append(row + self._fill_element_states(p["created_at"], p['timezone'], days_history, g["state"], g['seven_day_history']))
+                rows.append(row + self._fill_element_states(p["created_at"], p["timezone"], days_history, g["state"], g["seven_day_history"]))
 
         for i in range(days_history):
             header.append((date.today() - timedelta(days=i)).strftime("%m/%d"))
-        dtypes = ['t'] * len(header)
+        dtypes = ["t"] * len(header)
         return title, header, rows, dtypes
 
     def get_monthly_report(self):
         headers = self.cloud_client.build_request_headers()
-        title = 'Monthly report for {}'.format(self.args.date)
-        header = ['Statistic', 'Value', 'Units', 'Note']
-        self.tick('\\')
-        premises = {premise['id']: premise for premise in sorted(self._get_all_elements("premise"), key=lambda x : x["created_at"])}
-        self.tick('_')
+        title = "Monthly report for {}".format(self.args.date)
+        header = ["Statistic", "Value", "Units", "Note"]
+        self.tick("\\")
+        premises = {premise["id"]: premise for premise in sorted(self._get_all_elements("premise"), key=lambda x : x["created_at"])}
+        self.tick("_")
         all_meters = self._get_all_elements("meter")
-        self.tick('/')
-        meter_types = list(set([meter['type'] for meter in all_meters])) if len(all_meters) else list(CopperEnterpriseClient.METER_TYPE_UOM)
+        self.tick("/")
+        meter_types = list(set([meter["type"] for meter in all_meters])) if len(all_meters) else list(CopperEnterpriseClient.METER_TYPE_UOM)
         meter_types.sort()
         rows = []
         meters_by_type = {type: [] for type in meter_types}
@@ -781,25 +781,25 @@ class CopperEnterpriseClient():
         end = start + relativedelta(months=1) + timedelta(days=1)
 
         for premise in premises.values():
-            premise['meters'] = []
+            premise["meters"] = []
 
         # Split meters out by type for faster processing below, and drop meters that did not exist prior to the start date
         meters = []
         for meter in all_meters:
-            #if meter["state"] != 'connected':
-            #    print('skipping disonnected meter {}'.format(meter["id"]))
+            #if meter["state"] != "connected":
+            #    print("skipping disonnected meter {}".format(meter["id"]))
             #    continue
-            premise = premises[meter['premise_id']]
+            premise = premises[meter["premise_id"]]
             tz = pytz.timezone(premise["timezone"])
             meter_created = parser.parse(meter["created_at"]).astimezone(tz).replace(tzinfo=None)
             premise_created = parser.parse(meter["premise_created_at"]).astimezone(tz).replace(tzinfo=None)
             if end < meter_created or end < premise_created:
                 if self.args.debug:
-                    print('skipping meter {} which did not exist prior to {}'.format(meter["id"], end))
+                    print("skipping meter {} which did not exist prior to {}".format(meter["id"], end))
                 continue
             meters.append(meter)
-            meters_by_type[meter['type']].append(meter)
-            premise['meters'].append(meter)
+            meters_by_type[meter["type"]].append(meter)
+            premise["meters"].append(meter)
 
         # Drop premises that did not exist prior to the start date. Can't combine with previous step
         # since there may be multiple meters for the same prem needing to look up timezone
@@ -815,41 +815,41 @@ class CopperEnterpriseClient():
                 istart = datetime.combine(start, time()) - timedelta(hours=offset)
                 iend = (istart + relativedelta(months=1) + timedelta(days=1)).strftime(CopperEnterpriseClient.DATETIME_FMT)
                 istart = istart.strftime(CopperEnterpriseClient.DATETIME_FMT)
-            tz = pytz.timezone(premise['timezone'])
+            tz = pytz.timezone(premise["timezone"])
             premise_created = parser.parse(premise["created_at"]).astimezone(tz).replace(tzinfo=None)
             if end < premise_created:
                 if self.args.debug:
-                    print('dropping premise {} which did not exist prior to {}'.format(premise["id"], end))
-                if len(premise['meters']):
-                    raise Exception('ERROR: premise {} still contains meters {}'.format(premise["id"], pformat(premise["meters"])))
+                    print("dropping premise {} which did not exist prior to {}".format(premise["id"], end))
+                if len(premise["meters"]):
+                    raise Exception("ERROR: premise {} still contains meters {}".format(premise["id"], pformat(premise["meters"])))
                 del premises[pid]
 
-        rows.append(['total homes', len(premises), '', '1'])
-        rows.append(['total meters', len(meters), '', '1'])
+        rows.append(["total homes", len(premises), "", "1"])
+        rows.append(["total meters", len(meters), "", "1"])
 
         reporting_meters = 0
         for meter_type in meter_types:
-            rows.append(['{} meters'.format(meter_type), len([meter for meter in meters if meter['type'] == meter_type]), '', '1'])
+            rows.append(["{} meters".format(meter_type), len([meter for meter in meters if meter["type"] == meter_type]), "", "1"])
             if self.args.include_sum:
-                print('\n{}'.format(meter_type))
+                print("\n{}".format(meter_type))
                 sum_usage = 0
                 for meter in meters_by_type[meter_type]:
                     usage = self._get_meter_usage(
                         meter["id"],
                         start.strftime(CopperEnterpriseClient.DATE_FMT),
                         end.strftime(CopperEnterpriseClient.DATE_FMT),
-                        'month',
+                        "month",
                         step=45,
-                        timezone=premises[meter['premise_id']]['timezone']
+                        timezone=premises[meter["premise_id"]]["timezone"]
                     )
                     sum_usage += usage.get("sum_usage", 0) if usage else 0
-                rows.append(['{} cumulative per-meter usage'.format(meter_type), round(sum_usage, 2), CopperEnterpriseClient.METER_TYPE_UOM[meter_type], '2'])
+                rows.append(["{} cumulative per-meter usage".format(meter_type), round(sum_usage, 2), CopperEnterpriseClient.METER_TYPE_UOM[meter_type], "2"])
             url = "{url}/partner/{eid}/aggregate/usage?{qstr}".format(
                 url=CopperCloudClient.API_URL,
                 eid=self.args.enterprise_id,
                 qstr=urlencode(
                     {
-                        "granularity": 'month',
+                        "granularity": "month",
                         "start": istart,
                         "end": iend,
                         "meter_type": meter_type,
@@ -865,18 +865,18 @@ class CopperEnterpriseClient():
             sum_usage = response["sum_energy"] if response["sum_energy"] else 0
             reporting_meters += response["meter_count"] if response["meter_count"] else 0
             if response["meter_count"]:
-                #rows.append(['{} meters reporting'.format(meter_type), response["meter_count"], '', '3'])
-                rows.append(['{} aggregate usage'.format(meter_type), round(sum_usage, 2), CopperEnterpriseClient.METER_TYPE_UOM[meter_type], '4'])
+                #rows.append(["{} meters reporting".format(meter_type), response["meter_count"], "", "3"])
+                rows.append(["{} aggregate usage".format(meter_type), round(sum_usage, 2), CopperEnterpriseClient.METER_TYPE_UOM[meter_type], "4"])
 
-        #rows.append(['total reporting meters', reporting_meters, '', '3'])
+        #rows.append(["total reporting meters", reporting_meters, "", "3"])
 
-        legend_header = ['Note', 'Description']
+        legend_header = ["Note", "Description"]
         legend_rows = [
             legend_header,
-            ['1', 'Number of elements in existence during the report window'],
-            ['2', 'Sum of individual meter usages during the report window'],
-            ['3', 'Number of currently-connected meters contributing to the aggregate usage'],
-            ['4', 'Aggregate usage of currently-connected meters during the report window'],
+            ["1", "Number of elements in existence during the report window"],
+            ["2", "Sum of individual meter usages during the report window"],
+            ["3", "Number of currently-connected meters contributing to the aggregate usage"],
+            ["4", "Aggregate usage of currently-connected meters during the report window"],
         ]
         if not self.args.quiet:
             self.create_and_print_table("\nLegend", legend_header, legend_rows, ["t"] * len(legend_header))
@@ -884,7 +884,7 @@ class CopperEnterpriseClient():
             output_file = os.path.join(self.args.output_dir, "readme.txt")
             self.write_csvfile(output_file, legend_rows, mode="w")
 
-        dtypes = ['t'] * len(header)
+        dtypes = ["t"] * len(header)
         return title, header, rows, dtypes
 
     def parse_args(self):
@@ -927,7 +927,7 @@ class CopperEnterpriseClient():
         )
         parser.add_argument(
             "--enterprise_id",
-            dest='enterprise_id',
+            dest="enterprise_id",
             default=os.environ["COPPER_ENTERPRISE_ID"],
             help="Enterprise ID (filter premises belonging to enterprise)"
         )
