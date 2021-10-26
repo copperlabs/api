@@ -323,9 +323,13 @@ class CopperEnterpriseClient():
             "Email",
         ]
         headers = self.cloud_client.build_request_headers()
-        url =  "{url}/partner/{id}/premise".format(
+        query_params = {}
+        if self.args.with_users:
+            query_params["with_users"] = True
+        url =  "{url}/partner/{id}/premise{qstr}".format(
             url=CopperCloudClient.API_URL,
             id=self.args.enterprise_id,
+            qstr="?{}".format(urlencode(query_params)) if len(list(query_params)) else ""
         )
         prems = self.cloud_client.get_helper(url, headers)
         prems = sorted(prems, key=lambda x:x["created_at"])
@@ -346,7 +350,7 @@ class CopperEnterpriseClient():
                 p["postal_code"],
                 p["county_district"],
                 p["state_region"],
-                p["tags"],
+                list(set(p["tags"])),
                 emails,
             ])
         dtypes = ["a"] * len(header)
@@ -1008,6 +1012,13 @@ class CopperEnterpriseClient():
         )
 
         parser_prem = subparser.add_parser("premise")
+        parser_prem .add_argument(
+            "--with-users",
+            dest="with_users",
+            action="store_true",
+            default=False,
+            help="Include user emails in report",
+        )
         parser_prem.set_defaults(func=CopperEnterpriseClient.get_prem_data)
 
         parser_gateway = subparser.add_parser("gateway")

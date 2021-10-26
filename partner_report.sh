@@ -11,13 +11,14 @@ handle=$1
 . venv/bin/activate
 prem_report=${reports_dir}/premises.${handle}.${report_date}.csv
 echo "Compiling prem list for ${handle}"
-num_prems=`python copper-enterprise-client.py --csv-output-file ${prem_report} premise | grep 'Building information for' | awk '{print $4}'`
+num_prems=`python copper-enterprise-client.py --csv-output-file ${prem_report} premise --with-users | grep 'Building information for' | awk '{print $4}'`
 
 health_report=${reports_dir}/health_history.${handle}.${report_date}.csv
 echo "Compiling health history for ${handle}"
 python copper-enterprise-client.py --csv-output-file ${health_report} report health
 
 echo "prems created:                ${num_prems}"
+echo "mobile users:                 `cat ${prem_report} | grep -c has_mobile_app`"
 echo "total gateways:               `cat ${health_report} | grep -c gateway`"
 echo "active gateways:              `cat ${health_report} | grep gateway | grep -c active`"
 echo "disconnected gateways:        `cat ${health_report} | grep gateway | grep -vc active`"
