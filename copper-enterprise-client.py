@@ -158,16 +158,18 @@ class CopperEnterpriseClient():
         start = parser.parse(start)
         end = parser.parse(end)
         offset = int(tz.localize(start).strftime("%z")[:-2])
+        utc_start = datetime.combine(start, time()) - timedelta(hours=offset)
+        utc_end = datetime.combine(end, time()) - timedelta(hours=offset)
         usage = None
         meter_created = parser.parse(meter_created_at).astimezone(tz).replace(tzinfo=None) if meter_created_at else None
-        if meter_created and start < meter_created:
+        if meter_created and utc_start < meter_created:
             start = meter_created
         for d in self._daterange(start, end, step):
             self.tick()
             istart = datetime.combine(d, time()) - timedelta(hours=offset)
             iend = istart + timedelta(days=step)
-            if iend > end:
-                iend = end
+            if iend > utc_end:
+                iend = utc_end
             if meter_created and iend < meter_created:
                 if self.args.debug:
                     print("skipping meter {} which does not exist on {}".format(meter_id, d))
