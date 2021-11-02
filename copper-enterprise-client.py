@@ -551,11 +551,18 @@ class CopperEnterpriseClient():
         title = "Grid readings download {} through {}".format(self.args.start, self.args.end)
         header = ["Premise ID", "Address", "City", "Postal Code", "Gateway ID"]
         premises = {premise["id"]: premise for premise in self._get_all_elements("premise")}
+        timezone = None
+        for premise in premises.values():
+            # Grab timezone from the first prem, used to build up a UTC query to the cloud
+            timezone = premise["timezone"]
+            break
         gateways = self._get_all_elements("gateway")
         all_gateway_readings = self._get_grid_readings(
             self.args.start,
             self.args.end,
-            self.args.timezone,
+            timezone,
+            premise_id=self.args.premise_id,
+            gateway_id=self.args.gateway_id,
         )
         rows = []
         gateway_readings = {}
@@ -566,6 +573,9 @@ class CopperEnterpriseClient():
             gateway_readings[reading["gateway_id"]].append(reading)
             
         for gateway in gateways:
+            if ((self.args.gateway_id and self.args.gateway_id != gateway["id"]) or
+                (self.args.premise_id and self.args.premise_id != gateway["premise_id"])):
+                continue
             self.tick("g")
             rows.append([
                 premises[gateway["premise_id"]]["id"],
@@ -591,7 +601,7 @@ class CopperEnterpriseClient():
             data = [["Gateway ID", "Timestamp", "Voltage", "Frequency"]]
             for reading in readings:
                 rx_utc = parser.parse(reading["hw_timestamp"])
-                rx_local = rx_utc.astimezone(pytz.timezone(self.args.timezone)).replace(tzinfo=None)
+                rx_local = rx_utc.astimezone(pytz.timezone(premises[gateway["premise_id"]]["timezone"])).replace(tzinfo=None)
                 data.append([
                     reading["gateway_id"],
                     rx_local,
@@ -1031,9 +1041,20 @@ class CopperEnterpriseClient():
         parser_grid_latest = subparser_grid.add_parser("latest")
         parser_grid_latest.set_defaults(func=CopperEnterpriseClient.get_grid_latest)
         parser_grid_readings = subparser_grid.add_parser("readings")
+        parser_grid_readings.add_argument(
+            "--premise-id",
+            dest="premise_id",
+            default=None,
+            help="Select a single premise to query.",
+        )
+        parser_grid_readings.add_argument(
+            "--gateway-id",
+            dest="gateway_id",
+            default=None,
+            help="Select a single gateway to query.",
+        )
         parser_grid_readings.add_argument("start", help="Query start date, formatted as: " + CopperEnterpriseClient.HELP_DATE_FMT)
         parser_grid_readings.add_argument("end", help="Query end date, formatted as: " + CopperEnterpriseClient.HELP_DATE_FMT)
-        parser_grid_readings.add_argument("timezone", help="Timezone (ex: 'America/Denver') for all meters to minimize hits on Copper Cloud.")
         parser_grid_readings.set_defaults(func=CopperEnterpriseClient.get_grid_readings)
 
         parser_report = subparser.add_parser("report")
