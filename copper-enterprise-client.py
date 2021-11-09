@@ -794,10 +794,7 @@ class CopperEnterpriseClient():
 
         # Grab the monthly usage calculated in arrears for the first day of month after the desired month
         start = parser.parse(self.args.date).replace(day=1)
-        end = start + relativedelta(months=1) + timedelta(days=1)
-
-        for premise in premises.values():
-            premise["meters"] = []
+        end = start + relativedelta(months=1) #+ timedelta(days=1)
 
         # Split meters out by type for faster processing below, and drop meters that did not exist prior to the start date
         meters = []
@@ -809,38 +806,34 @@ class CopperEnterpriseClient():
             tz = pytz.timezone(premise["timezone"])
             meter_created = parser.parse(meter["created_at"]).astimezone(tz).replace(tzinfo=None)
             premise_created = parser.parse(meter["premise_created_at"]).astimezone(tz).replace(tzinfo=None)
-            if end < meter_created or end < premise_created:
+            if end < meter_created: # or end < premise_created:
                 if self.args.debug:
                     print("skipping meter {} which did not exist prior to {}".format(meter["id"], end))
                 continue
             meters.append(meter)
             meters_by_type[meter["type"]].append(meter)
-            premise["meters"].append(meter)
 
         # Drop premises that did not exist prior to the start date. Can't combine with previous step
         # since there may be multiple meters for the same prem needing to look up timezone
-        timezone = None
         istart = None
         iend = None
+        num_prems = len(premises)
         for pid in list(premises):
             premise = premises[pid]
             tz = pytz.timezone(premise["timezone"])
-            if not timezone:
-                timezone = premise["timezone"]
+            if not istart:
                 offset = int(tz.localize(start).strftime("%z")[:-2])
                 istart = datetime.combine(start, time()) - timedelta(hours=offset)
-                iend = (istart + relativedelta(months=1) + timedelta(days=1)).strftime(CopperEnterpriseClient.DATETIME_FMT)
+                #iend = (istart + relativedelta(months=1) + timedelta(days=1)).strftime(CopperEnterpriseClient.DATETIME_FMT)
+                iend = (istart + relativedelta(months=1)).strftime(CopperEnterpriseClient.DATETIME_FMT)
                 istart = istart.strftime(CopperEnterpriseClient.DATETIME_FMT)
-            tz = pytz.timezone(premise["timezone"])
             premise_created = parser.parse(premise["created_at"]).astimezone(tz).replace(tzinfo=None)
             if end < premise_created:
                 if self.args.debug:
                     print("dropping premise {} which did not exist prior to {}".format(premise["id"], end))
-                if len(premise["meters"]):
-                    raise Exception("ERROR: premise {} still contains meters {}".format(premise["id"], pformat(premise["meters"])))
-                del premises[pid]
+                num_prems -= 1
 
-        rows.append(["total homes", len(premises), "", "1"])
+        rows.append(["total homes", num_prems, "", "1"])
         rows.append(["total meters", len(meters), "", "1"])
 
         reporting_meters = 0
@@ -865,7 +858,7 @@ class CopperEnterpriseClient():
                 eid=self.args.enterprise_id,
                 qstr=urlencode(
                     {
-                        "granularity": "month",
+                        "granularity": "day",
                         "start": istart,
                         "end": iend,
                         "meter_type": meter_type,
