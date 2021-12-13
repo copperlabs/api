@@ -337,7 +337,7 @@ class CopperEnterpriseClient():
             )
         )
         for p in prems:
-            emails = ";".join([u["email"] for u in p.get("user_list", [])]) 
+            emails = ";".join([u.get("email", "missing") for u in p.get("user_list", [])]) 
             rows.append([
                 p["id"],
                 p["created_at"],
