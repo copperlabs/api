@@ -109,7 +109,7 @@ class CopperEnterpriseClient():
         next_url = self._make_next_url(endpoint)
         try:
             while more_elements:
-                resp = self.cloud_client.get_helper(next_url, headers)
+                resp = self.cloud_client.get_helper(next_url)
                 elements += resp["results"]
                 more_elements = resp.get("next", None)
                 if more_elements:
@@ -129,7 +129,7 @@ class CopperEnterpriseClient():
         next_url = self._make_element_url(endpoint, limit=limit, offset=offset)
         try:
             while more_elements:
-                resp = self.cloud_client.get_helper(next_url, headers)
+                resp = self.cloud_client.get_helper(next_url)
                 elements += resp
                 more_elements = (len(resp) == limit)
                 if more_elements:
@@ -153,7 +153,7 @@ class CopperEnterpriseClient():
                 mid=meter_id,
                 eid=self.args.enterprise_id,
             )
-            location = self.cloud_client.get_helper(url, headers)
+            location = self.cloud_client.get_helper(url)
         tz = pytz.timezone(location["timezone"])
         start = parser.parse(start)
         end = parser.parse(end)
@@ -187,7 +187,7 @@ class CopperEnterpriseClient():
                 ),
             )
             try:
-                data = self.cloud_client.get_helper(url, headers)
+                data = self.cloud_client.get_helper(url)
                 if not usage:
                     usage = {
                         "meter_id": data["meter_id"],
@@ -219,7 +219,7 @@ class CopperEnterpriseClient():
                 mid=meter_id,
                 eid=self.args.enterprise_id,
             )
-            location = self.cloud_client.get_helper(url, headers)
+            location = self.cloud_client.get_helper(url)
         tz = pytz.timezone(location["timezone"])
         start = parser.parse(start)
         end = parser.parse(end)
@@ -244,7 +244,7 @@ class CopperEnterpriseClient():
                 }),
             )
             try:
-                data = self.cloud_client.get_helper(url, headers)
+                data = self.cloud_client.get_helper(url)
                 data["results"] = sorted(data["results"], key=lambda x:x["time"])
                 if not readings:
                     readings = data
@@ -333,7 +333,7 @@ class CopperEnterpriseClient():
             id=self.args.enterprise_id,
             qstr="?{}".format(urlencode(query_params)) if len(list(query_params)) else ""
         )
-        prems = self.cloud_client.get_helper(url, headers)
+        prems = self.cloud_client.get_helper(url)
         prems = sorted(prems, key=lambda x:x["created_at"])
         rows = []
         print (
@@ -373,7 +373,7 @@ class CopperEnterpriseClient():
             url=CopperCloudClient.API_URL,
             id=self.args.enterprise_id,
         )
-        gateways = self.cloud_client.get_helper(url, headers)
+        gateways = self.cloud_client.get_helper(url)
         rows = []
         print (
             "Building information for {num} gateways on {now}...".format(
@@ -535,7 +535,7 @@ class CopperEnterpriseClient():
                 qstr=urlencode(query_params)
             )
             try:
-                data = self.cloud_client.get_helper(url, headers)
+                data = self.cloud_client.get_helper(url)
                 data = sorted(data, key=lambda x:x["hw_timestamp"])
                 readings += data
 
@@ -638,7 +638,7 @@ class CopperEnterpriseClient():
                 url=CopperCloudClient.API_URL, mid=meter["meter_id"],
                 eid=self.args.enterprise_id,
             )
-            location = self.cloud_client.get_helper(url, headers)
+            location = self.cloud_client.get_helper(url)
             if location["street_address"] not in prems.keys():
                 prems[location["street_address"]] = {}
             prems[location["street_address"]][meter["meter_type"]] = {
@@ -867,7 +867,7 @@ class CopperEnterpriseClient():
             )
             try:
                 self.tick()
-                response = self.cloud_client.get_helper(url, headers)
+                response = self.cloud_client.get_helper(url)
             except Exception as err:
                 # assume there were no meters found for this type
                 response = {"meter_count": 0, "sum_energy": 0}
