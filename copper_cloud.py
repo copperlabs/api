@@ -69,7 +69,9 @@ class CopperCloudClient():
                 'client_id': CopperCloudClient.CLIENT_ID,
                 'client_secret': CopperCloudClient.CLIENT_SECRET,
                 'audience': CopperCloudClient.BASE_API_URL}
-        self.token_data = requests.post(url=url, headers=headers, json=data).json()
+        r = requests.post(url=url, headers=headers, json=data)
+        self.__handle_response(r)
+        self.token_data = r.json()
         self.__update_cache()
 
     def __update_cache(self):
