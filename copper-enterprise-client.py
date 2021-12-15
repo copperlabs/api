@@ -103,7 +103,6 @@ class CopperEnterpriseClient():
             writer.writerows(rows)
 
     def _get_all_elements_next(self, endpoint):
-        headers = self.cloud_client.build_request_headers()
         elements = []
         more_elements = True
         next_url = self._make_next_url(endpoint)
@@ -121,7 +120,6 @@ class CopperEnterpriseClient():
         return elements
 
     def _get_all_elements(self, endpoint):
-        headers = self.cloud_client.build_request_headers()
         elements = []
         more_elements = True
         limit=1000
@@ -143,7 +141,6 @@ class CopperEnterpriseClient():
         return (start + timedelta(days=i) for i in range(0, (end - start).days + 1, step))
 
     def _get_meter_usage(self, meter_id, start, end, granularity, meter_created_at=None, step=1, timezone=None):
-        headers = self.cloud_client.build_request_headers()
         timezone = getattr(self.args, "timezone", timezone)
         if timezone:
             location = {"timezone": timezone}
@@ -210,7 +207,6 @@ class CopperEnterpriseClient():
         return usage
 
     def _get_meter_readings(self, meter_id, start, end, granularity, meter_created_at=None):
-        headers = self.cloud_client.build_request_headers()
         if getattr(self.args, "timezone", None):
             location = {"timezone": self.args.timezone}
         else:
@@ -324,7 +320,6 @@ class CopperEnterpriseClient():
             "Tags",
             "Email",
         ]
-        headers = self.cloud_client.build_request_headers()
         query_params = {}
         if self.args.with_users:
             query_params["with_users"] = True
@@ -368,7 +363,6 @@ class CopperEnterpriseClient():
             "Last Heard",
             "Firmware Version",
         ]
-        headers = self.cloud_client.build_request_headers()
         url =  "{url}/partner/{id}/gateway".format(
             url=CopperCloudClient.API_URL,
             id=self.args.enterprise_id,
@@ -511,7 +505,6 @@ class CopperEnterpriseClient():
         return title, header, rows, dtypes
 
     def _get_grid_readings(self, start, end, timezone, premise_id=None, gateway_id=None):
-        headers = self.cloud_client.build_request_headers()
         tz = pytz.timezone(timezone)
         start = parser.parse(start)
         end = parser.parse(end)
@@ -618,7 +611,6 @@ class CopperEnterpriseClient():
         end = midnight.strftime(CopperEnterpriseClient.DATE_FMT)
         title = "Suspect water meter reversals"
         header = ["Address", "Indoor Usage", "Outdoor Usage"]
-        headers = self.cloud_client.build_request_headers()
         meters = self._get_all_elements_next("bulk")
         rows = []
         prems = {}
@@ -779,7 +771,6 @@ class CopperEnterpriseClient():
         return title, header, rows, dtypes
 
     def get_monthly_report(self):
-        headers = self.cloud_client.build_request_headers()
         title = "Monthly report for {}".format(self.args.date)
         header = ["Statistic", "Value", "Units", "Note"]
         self.tick("\\")

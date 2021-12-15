@@ -102,7 +102,7 @@ class CopperCloudClient():
         except ClientError as err:
             raise err
         except Exception as err:
-            if instance(err, UnauthorizedError):
+            if isinstance(err, UnauthorizedError):
                 self.__get_token_data()
             r = requests.get(url, headers=self.build_request_headers())
             self.__handle_response(r)
@@ -124,7 +124,7 @@ class CopperCloudClient():
             r = requests.post(url, headers=self.build_request_headers(), json=data)
             self.__handle_response(r)
         except Exception as err:
-            if instance(err, UnauthorizedError):
+            if isinstance(err, UnauthorizedError):
                 self.__get_token_data()
             else:
                 print(err)
