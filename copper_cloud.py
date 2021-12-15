@@ -54,11 +54,11 @@ class CopperCloudClient():
 
         # hit API endpoint, in part to make sure the access_token is valid
         try:
-            self.get_helper(test_url, self.build_request_headers())
+            self.get_helper(test_url)
         except UnauthorizedError:
             # assume the access_token expired, automatically refresh
             self.__get_token_data()
-            self.get_helper(test_url, self.build_request_headers())
+            self.get_helper(test_url)
 
     def __get_token_data(self):
         if self.args.debug:
@@ -95,7 +95,7 @@ class CopperCloudClient():
                     token_type=self.token_data['token_type'],
                     access_token=self.token_data['access_token'])}
 
-    def get_helper(self, url, ):
+    def get_helper(self, url):
         try:
             r = requests.get(url, headers=self.build_request_headers())
             self.__handle_response(r)
@@ -119,7 +119,7 @@ class CopperCloudClient():
             else:
                 raise Exception(r)
 
-    def post_helper(self, url, headers, data):
+    def post_helper(self, url, data):
         try:
             r = requests.post(url, headers=self.build_request_headers(), json=data)
             self.__handle_response(r)
