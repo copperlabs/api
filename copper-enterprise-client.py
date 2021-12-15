@@ -103,13 +103,12 @@ class CopperEnterpriseClient():
             writer.writerows(rows)
 
     def _get_all_elements_next(self, endpoint):
-        headers = self.cloud_client.build_request_headers()
         elements = []
         more_elements = True
         next_url = self._make_next_url(endpoint)
         try:
             while more_elements:
-                resp = self.cloud_client.get_helper(next_url, headers)
+                resp = self.cloud_client.get_helper(next_url)
                 elements += resp["results"]
                 more_elements = resp.get("next", None)
                 if more_elements:
@@ -121,7 +120,6 @@ class CopperEnterpriseClient():
         return elements
 
     def _get_all_elements(self, endpoint):
-        headers = self.cloud_client.build_request_headers()
         elements = []
         more_elements = True
         limit=1000
@@ -129,7 +127,7 @@ class CopperEnterpriseClient():
         next_url = self._make_element_url(endpoint, limit=limit, offset=offset)
         try:
             while more_elements:
-                resp = self.cloud_client.get_helper(next_url, headers)
+                resp = self.cloud_client.get_helper(next_url)
                 elements += resp
                 more_elements = (len(resp) == limit)
                 if more_elements:
@@ -143,7 +141,6 @@ class CopperEnterpriseClient():
         return (start + timedelta(days=i) for i in range(0, (end - start).days + 1, step))
 
     def _get_meter_usage(self, meter_id, start, end, granularity, meter_created_at=None, step=1, timezone=None):
-        headers = self.cloud_client.build_request_headers()
         timezone = getattr(self.args, "timezone", timezone)
         if timezone:
             location = {"timezone": timezone}
@@ -153,7 +150,7 @@ class CopperEnterpriseClient():
                 mid=meter_id,
                 eid=self.args.enterprise_id,
             )
-            location = self.cloud_client.get_helper(url, headers)
+            location = self.cloud_client.get_helper(url)
         tz = pytz.timezone(location["timezone"])
         start = parser.parse(start)
         end = parser.parse(end)
@@ -187,7 +184,7 @@ class CopperEnterpriseClient():
                 ),
             )
             try:
-                data = self.cloud_client.get_helper(url, headers)
+                data = self.cloud_client.get_helper(url)
                 if not usage:
                     usage = {
                         "meter_id": data["meter_id"],
@@ -210,7 +207,6 @@ class CopperEnterpriseClient():
         return usage
 
     def _get_meter_readings(self, meter_id, start, end, granularity, meter_created_at=None):
-        headers = self.cloud_client.build_request_headers()
         if getattr(self.args, "timezone", None):
             location = {"timezone": self.args.timezone}
         else:
@@ -219,7 +215,7 @@ class CopperEnterpriseClient():
                 mid=meter_id,
                 eid=self.args.enterprise_id,
             )
-            location = self.cloud_client.get_helper(url, headers)
+            location = self.cloud_client.get_helper(url)
         tz = pytz.timezone(location["timezone"])
         start = parser.parse(start)
         end = parser.parse(end)
@@ -244,7 +240,7 @@ class CopperEnterpriseClient():
                 }),
             )
             try:
-                data = self.cloud_client.get_helper(url, headers)
+                data = self.cloud_client.get_helper(url)
                 data["results"] = sorted(data["results"], key=lambda x:x["time"])
                 if not readings:
                     readings = data
@@ -324,7 +320,6 @@ class CopperEnterpriseClient():
             "Tags",
             "Email",
         ]
-        headers = self.cloud_client.build_request_headers()
         query_params = {}
         if self.args.with_users:
             query_params["with_users"] = True
@@ -333,7 +328,7 @@ class CopperEnterpriseClient():
             id=self.args.enterprise_id,
             qstr="?{}".format(urlencode(query_params)) if len(list(query_params)) else ""
         )
-        prems = self.cloud_client.get_helper(url, headers)
+        prems = self.cloud_client.get_helper(url)
         prems = sorted(prems, key=lambda x:x["created_at"])
         rows = []
         print (
@@ -368,12 +363,11 @@ class CopperEnterpriseClient():
             "Last Heard",
             "Firmware Version",
         ]
-        headers = self.cloud_client.build_request_headers()
         url =  "{url}/partner/{id}/gateway".format(
             url=CopperCloudClient.API_URL,
             id=self.args.enterprise_id,
         )
-        gateways = self.cloud_client.get_helper(url, headers)
+        gateways = self.cloud_client.get_helper(url)
         rows = []
         print (
             "Building information for {num} gateways on {now}...".format(
@@ -511,7 +505,6 @@ class CopperEnterpriseClient():
         return title, header, rows, dtypes
 
     def _get_grid_readings(self, start, end, timezone, premise_id=None, gateway_id=None):
-        headers = self.cloud_client.build_request_headers()
         tz = pytz.timezone(timezone)
         start = parser.parse(start)
         end = parser.parse(end)
@@ -535,7 +528,7 @@ class CopperEnterpriseClient():
                 qstr=urlencode(query_params)
             )
             try:
-                data = self.cloud_client.get_helper(url, headers)
+                data = self.cloud_client.get_helper(url)
                 data = sorted(data, key=lambda x:x["hw_timestamp"])
                 readings += data
 
@@ -618,7 +611,6 @@ class CopperEnterpriseClient():
         end = midnight.strftime(CopperEnterpriseClient.DATE_FMT)
         title = "Suspect water meter reversals"
         header = ["Address", "Indoor Usage", "Outdoor Usage"]
-        headers = self.cloud_client.build_request_headers()
         meters = self._get_all_elements_next("bulk")
         rows = []
         prems = {}
@@ -638,7 +630,7 @@ class CopperEnterpriseClient():
                 url=CopperCloudClient.API_URL, mid=meter["meter_id"],
                 eid=self.args.enterprise_id,
             )
-            location = self.cloud_client.get_helper(url, headers)
+            location = self.cloud_client.get_helper(url)
             if location["street_address"] not in prems.keys():
                 prems[location["street_address"]] = {}
             prems[location["street_address"]][meter["meter_type"]] = {
@@ -779,7 +771,6 @@ class CopperEnterpriseClient():
         return title, header, rows, dtypes
 
     def get_monthly_report(self):
-        headers = self.cloud_client.build_request_headers()
         title = "Monthly report for {}".format(self.args.date)
         header = ["Statistic", "Value", "Units", "Note"]
         self.tick("\\")
@@ -867,7 +858,7 @@ class CopperEnterpriseClient():
             )
             try:
                 self.tick()
-                response = self.cloud_client.get_helper(url, headers)
+                response = self.cloud_client.get_helper(url)
             except Exception as err:
                 # assume there were no meters found for this type
                 response = {"meter_count": 0, "sum_energy": 0}

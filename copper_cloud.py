@@ -69,7 +69,7 @@ class CopperCloudClient():
                 'client_id': CopperCloudClient.CLIENT_ID,
                 'client_secret': CopperCloudClient.CLIENT_SECRET,
                 'audience': CopperCloudClient.BASE_API_URL}
-        self.token_data = self.post_helper(url, headers, data)
+        self.token_data = requests.post(url=url, headers=headers, json=data).json()
         self.__update_cache()
 
     def __update_cache(self):
@@ -95,16 +95,16 @@ class CopperCloudClient():
                     token_type=self.token_data['token_type'],
                     access_token=self.token_data['access_token'])}
 
-    def get_helper(self, url, headers):
+    def get_helper(self, url, ):
         try:
-            r = requests.get(url, headers=headers)
+            r = requests.get(url, headers=self.build_request_headers())
             self.__handle_response(r)
         except ClientError as err:
             raise err
         except Exception as err:
-            if err == UnauthorizedError:
+            if isinstance(err, UnauthorizedError):
                 self.__get_token_data()
-            r = requests.get(url, headers=headers)
+            r = requests.get(url, headers=self.build_request_headers())
             self.__handle_response(r)
         return r.json()
     
@@ -121,13 +121,13 @@ class CopperCloudClient():
 
     def post_helper(self, url, headers, data):
         try:
-            r = requests.post(url, headers=headers, json=data)
+            r = requests.post(url, headers=self.build_request_headers(), json=data)
             self.__handle_response(r)
         except Exception as err:
-            if err == UnauthorizedError:
+            if isinstance(err, UnauthorizedError):
                 self.__get_token_data()
             else:
                 print(err)
-            r = requests.post(url, headers=headers, json=data)
+            r = requests.post(url, headers=self.build_request_headers(), json=data)
             self.__handle_response(r)
         return r.json()
