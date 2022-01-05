@@ -849,7 +849,7 @@ class CopperEnterpriseClient():
                 eid=self.args.enterprise_id,
                 qstr=urlencode(
                     {
-                        "granularity": "day",
+                        "granularity": "month",
                         "start": istart,
                         "end": iend,
                         "meter_type": meter_type,
