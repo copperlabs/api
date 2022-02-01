@@ -55,6 +55,7 @@ Each response will be returned with one of the following HTTP status codes:
 - **https://api.copperlabs.com/api/v2/partner**
 
 ## Example python command-line scripts
+Pre-req: Install Python 3.9.
 
 ### (OPT) Create a python virtual environment and install requirements
 ```
@@ -71,7 +72,7 @@ python copper-client.py
 ```
 
 ### Enterprise (multi-account) access
-This script will log in using a client ID and secret (provided out-of-band) and dump all meters for premises within the enterprise.
+This script will log in using a client ID and secret (provided out-of-band) and dump all meters for premises within the enterprise. This README captures the most common use-cases. Add '--help' to explore all available options for the script.
 
 #### Premise Listing:
 Download all premises created in the enterprise
@@ -96,7 +97,7 @@ Meter usage and baseline data returns a timeseries, by default on a bihour basis
 - `baseline_summary__` => will be the same for a set of unique meter usage_result__ rows
 - `baseline_result__` => will be unique for each meter row
 
-#### Detailed historical data download:
+#### Detailed historical meter usage download:
 ```
 # Hourly download of all connected meters
 # Start and end dates can span many days, one csv created per meter
@@ -118,6 +119,18 @@ ex:
 
 ##### Note for interpreting CSV output files
 The CSV output file specific on the command-line contains summary information for premises, meters and sum usage between the start and end dates. Per-meter usage returns an hourly, interpolated timeseries and is written into a set of files; on per meter.
+
+#### Grid readings download:
+```
+# Latest voltage and frequenct readings for all gateways
+python copper-enterprise-client.py grid latest
+```
+```
+# Historical voltage and frequenct readings for one gateway
+# Note that output-dir is required due to the potential for a large number of files (one per gateway)
+# Note the gateway-id parameter is optional to fetch readings for a single gateway instead of all gateways in the enterprise account.
+python copper-enterprise-client.py --output-dir generated/xe_summit grid readings 2022-01-20 2022-01-21 --gateway-id 84cca8322ae4
+```
 
 #### Health report:
 Download a 7-day history of all gateways and meter.
