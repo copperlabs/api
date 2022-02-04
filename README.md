@@ -132,14 +132,14 @@ python copper-enterprise-client.py grid latest
 python copper-enterprise-client.py --output-dir generated/xe_summit grid readings 2022-01-20 2022-01-21 --gateway-id 84cca8322ae4
 ```
 
-#### Health report:
-Download a 7-day history of all gateways and meter.
+#### Monthly report:
+Download number of prems, meters and aggregate usage split out per meter type for a 1-month period.
 ```
 python copper-enterprise-client.py report monthly 2021-09
 ```
 
-#### Monthly report:
-Download number of prems, meters and aggregate usage split out per meter type for a 1-month period.
+#### Health report:
+Download a 7-day history of all gateways and meter.
 ```
 python copper-enterprise-client.py report health
 ```
