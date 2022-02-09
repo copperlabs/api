@@ -89,6 +89,10 @@ Include premise address:
 ```
 python copper-enterprise-client.py --csv-output-file generated/output.csv bulk --detailed
 ```
+Note that only meters heard 'recently' show up in the bulk output. Use the meter status command to fetch all meters, with last reading where appropriate
+```
+python copper-enterprise-client.py --csv-output-file generated/output.csv meter status --detailed
+```
 
 ##### Note for interpreting CSV output files
 Meter usage and baseline data returns a timeseries, by default on a bihour basis, in addition to summary stats for the meter. Each row in the CSV starts with one of four patterns:

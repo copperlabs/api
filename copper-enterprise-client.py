@@ -22,6 +22,7 @@ try:
 except ImportError:
     from urllib.parse import urlencode
 
+DEFAULT_QUERY_LIMIT = 1000
 
 class CopperEnterpriseClient():
     DATETIME_FMT = "%Y-%m-%dT%H:%M:%SZ"
@@ -76,7 +77,7 @@ class CopperEnterpriseClient():
         if output_file:
             self.write_csvfile(output_file, rows, mode="w")
 
-    def _make_next_url(self, endpoint, limit=1000):
+    def _make_next_url(self, endpoint, limit=DEFAULT_QUERY_LIMIT):
         return "{url}/partner/{id}/{endpoint}?limit={limit}".format(
             url=CopperCloudClient.API_URL,
             id=self.args.enterprise_id,
@@ -84,7 +85,7 @@ class CopperEnterpriseClient():
             limit=limit,
         )
 
-    def _make_element_url(self, endpoint, limit=1000, offset=0):
+    def _make_element_url(self, endpoint, limit=DEFAULT_QUERY_LIMIT, offset=0):
         return "{url}/partner/{id}/{endpoint}?limit={limit}&offset={offset}".format(
             url=CopperCloudClient.API_URL,
             id=self.args.enterprise_id,
@@ -122,7 +123,7 @@ class CopperEnterpriseClient():
     def _get_all_elements(self, endpoint):
         elements = []
         more_elements = True
-        limit=1000
+        limit=DEFAULT_QUERY_LIMIT
         offset=0
         next_url = self._make_element_url(endpoint, limit=limit, offset=offset)
         try:
@@ -300,6 +301,65 @@ class CopperEnterpriseClient():
                         meter["meter_id"],
                         meter["meter_type"],
                         timestamp_utc.astimezone(tz.tzlocal()),
+                        meter_value,
+                    ]
+                )
+                dtypes = ["t", "t", "a", "t"]
+        return title, header, rows, dtypes
+
+    def get_meter_data(self):
+        title = "Meter download"
+        if self.args.detailed:
+            header = [
+                "ID",
+                "Type",
+                "Address",
+                "City",
+                "Postal Code",
+                "Latest Timestamp",
+                "Latest Value",
+            ]
+        else:
+            header = ["ID", "Type", "Latest Timestamp", "Latest Value"]
+        meters = self._get_all_elements("meter")
+        premises = {}
+        if self.args.detailed:
+            premises = {premise["id"]: premise for premise in self._get_all_elements("premise")}
+        rows = []
+        print (
+            "Building information for {num} meters on {now}...".format(
+                num=len(meters), now=datetime.now().strftime("%c")
+            )
+        )
+        for meter in meters:
+            self.tick()
+            last = meter.get("last_reading")
+            meter_value = None
+            timestamp = None
+            if last:
+                value = last.get("value")
+                meter_value = format(value, ".3f")
+                timestamp_utc = parser.parse(last.get("hw_timestamp"))
+                timestamp = timestamp_utc.astimezone(tz.tzlocal())
+            if self.args.detailed:
+                rows.append(
+                    [
+                        meter["id"],
+                        meter["type"],
+                        premises[meter["premise_id"]]["street_address"],
+                        premises[meter["premise_id"]]["city_town"],
+                        premises[meter["premise_id"]]["postal_code"].rjust(5, "0"),
+                        timestamp,
+                        meter_value,
+                    ]
+                )
+                dtypes = ["t", "t", "t", "t", "t", "a", "t"]
+            else:
+                rows.append(
+                    [
+                        meter["id"],
+                        meter["type"],
+                        timestamp,
                         meter_value,
                     ]
                 )
@@ -946,6 +1006,15 @@ class CopperEnterpriseClient():
 
         parser_b = subparser.add_parser("meter")
         subparser_b = parser_b.add_subparsers()
+        parser_m_status = subparser_b.add_parser("status")
+        parser_m_status.add_argument(
+            "--detailed",
+            dest="detailed",
+            action="store_true",
+            default=False,
+            help="Enable detailed output",
+        )
+        parser_m_status.set_defaults(func=CopperEnterpriseClient.get_meter_data)
         parser_c = subparser_b.add_parser("usage")
         parser_c.add_argument(
             "--meter-id",
