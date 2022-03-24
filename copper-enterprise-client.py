@@ -207,6 +207,77 @@ class CopperEnterpriseClient():
                 print("GET ERROR: {}".format(pformat(err)))
         return usage
 
+    def _get_meter_generic(self, meter, start, end, granularity, step=1, timezone=None, endpoint='usage'):
+        timezone = getattr(self.args, "timezone", timezone)
+        if timezone:
+            location = {"timezone": timezone}
+        else:
+            url = "{url}/partner/{eid}/meter/{mid}/location".format(
+                url=CopperCloudClient.API_URL,
+                mid=meter['id'],
+                eid=self.args.enterprise_id,
+            )
+            location = self.cloud_client.get_helper(url)
+        tz = pytz.timezone(location["timezone"])
+        start = parser.parse(start)
+        end = parser.parse(end)
+        offset = int(tz.localize(start).strftime("%z")[:-2])
+        utc_start = datetime.combine(start, time()) - timedelta(hours=offset)
+        utc_end = datetime.combine(end, time()) - timedelta(hours=offset)
+        usage = None
+        meter_created = parser.parse(meter['created_at']).astimezone(tz).replace(tzinfo=None) if meter['created_at'] else None
+        if meter_created and utc_start < meter_created:
+            start = meter_created
+        for d in self._daterange(start, end, step):
+            self.tick()
+            istart = datetime.combine(d, time()) - timedelta(hours=offset)
+            iend = istart + timedelta(days=step)
+            if iend > utc_end:
+                iend = utc_end
+            if meter_created and iend < meter_created:
+                if self.args.debug:
+                    print("skipping meter {} which does not exist on {}".format(meter['id'], d))
+                continue
+            url = "{url}/partner/{eid}/meter/{mid}/{endpoint}?{qstr}".format(
+                url=CopperCloudClient.API_URL,
+                eid=self.args.enterprise_id,
+                mid=meter['id'],
+                endpoint=endpoint,
+                qstr=urlencode(
+                    {
+                        "granularity": granularity,
+                        "start": istart.strftime(CopperEnterpriseClient.DATETIME_FMT),
+                        "end": iend.strftime(CopperEnterpriseClient.DATETIME_FMT),
+                    }
+                ),
+            )
+            try:
+                data = self.cloud_client.get_helper(url)
+                sum_energy = data["sum_usage"] if 'sum_usage' in data.keys() else data['sum_energy']
+                sum_energy = sum_energy if sum_energy else 0
+                results = data["results"] if 'results' in data.keys() else data['series']
+                results = results if results else []
+                if not usage:
+                    usage = {
+                        "meter_id": meter['id'],
+                        "meter_type": meter['type'],
+                        "sum_energy": sum_energy,
+                        "results": results,
+                        "tz_offset": offset,
+                        "tz": location["timezone"]
+                    }
+                else:
+                    usage["sum_energy"] += sum_energy
+                    if (len(results) and
+                        d != end and
+                        usage["results"][-1]["time"] == results[0]["time"]):
+                        del usage["results"][-1]
+                    usage["results"] += results
+
+            except Exception as err:
+                print("GET ERROR: {}".format(pformat(err)))
+        return usage
+
     def _get_meter_readings(self, meter_id, start, end, granularity, meter_created_at=None):
         if getattr(self.args, "timezone", None):
             location = {"timezone": self.args.timezone}
@@ -447,49 +518,58 @@ class CopperEnterpriseClient():
         dtypes = ["a"] * len(header)
         return title, header, rows, dtypes
 
-    def get_meter_usage(self):
+    def get_meter_generic(self, endpoint):
         if not self.args.output_dir:
             print("Must add the top-level --output-dir option when running this command")
             exit(1)
-        title = "Meter usage download {} through {}".format(self.args.start, self.args.end)
+        title = "Meter {} download {} through {}".format(endpoint, self.args.start, self.args.end)
         header = ["ID", "Type", "Sum Usage"]
         meters = self._get_all_elements("meter")
         rows = []
         for meter in meters:
             if self.args.meter_id and meter["id"] != self.args.meter_id:
                 continue
-            destpath = "{output_dir}/{mid}.csv".format(output_dir=self.args.output_dir, mid=meter["id"].replace(":", "_"))
+            destpath = "{output_dir}/{mid}.{endpoint}.csv".format(output_dir=self.args.output_dir, mid=meter["id"].replace(":", "_"), endpoint=endpoint)
             if os.path.isfile(destpath):
                 if self.args.debug:
                     print ("\nSkipping collection for meter " + meter["id"])
                 continue
             print ("\nCollecting data for meter " + meter["id"])
-            usage = self._get_meter_usage(
-                meter["id"],
+            energy = self._get_meter_generic(
+                meter,
                 self.args.start,
                 self.args.end,
                 self.args.granularity,
-                meter["created_at"],
-                self.args.step
+                self.args.step,
+                endpoint=endpoint
             )
-            if not usage or not usage["sum_usage"]:
+            if not energy or not energy["sum_energy"]:
                 if self.args.debug:
                     print("nothing to save for meter {}".format(meter["id"]))
                 continue
             rows.append(
-                [usage["meter_id"], usage["meter_type"], usage["sum_usage"],]
+                [energy["meter_id"], energy["meter_type"], energy["sum_energy"],]
             )
             results = []
             results.append(["timestamp", "energy", "power"])
-            for result in usage["results"]:
+            for result in energy["results"]:
                 rx_utc = parser.parse(result["time"])
-                rx_local = rx_utc.astimezone(pytz.timezone(usage["tz"])).replace(tzinfo=None)
+                rx_local = rx_utc.astimezone(pytz.timezone(energy["tz"])).replace(tzinfo=None)
                 results.append(
-                    [rx_local, result["value"], result["power"],]
+                    [rx_local, result["usage"] if 'usage' in result.keys() else result['energy'], result["power"],]
                 )
             self.write_csvfile(destpath, results)
         dtypes = ["t", "t", "a"]
         return title, header, rows, dtypes
+
+    def get_meter_usage(self):
+        return self.get_meter_generic('usage')
+
+    def get_meter_baseline(self):
+        return self.get_meter_generic('baseline-series')
+
+    def get_meter_average(self):
+        return self.get_meter_generic('average-series')
 
     def get_meter_readings(self):
         if not self.args.output_dir:
@@ -703,6 +783,7 @@ class CopperEnterpriseClient():
             indoor = {"sum_usage": None}
             outdoor = {"sum_usage": None}
             if "water_indoor" in p.keys():
+                # TBD: convert to _generic
                 indoor = self._get_meter_usage(
                     p["water_indoor"]["meter_id"], start, end, "day", step=30
                 )
@@ -1075,6 +1156,64 @@ class CopperEnterpriseClient():
             default="summer",
             help="Method for checking [summer, winter]",
         )
+        parser_m_baseline = subparser_b.add_parser("baseline-series")
+        parser_m_baseline.add_argument(
+            "--meter-id",
+            dest="meter_id",
+            default=None,
+            help="Select a single meter to query.",
+        )
+        parser_m_baseline.add_argument(
+            "--granularity",
+            dest="granularity",
+            default="hour",
+            help="Set query granularity for time-series data.",
+        )
+        parser_m_baseline.add_argument(
+            "--timezone",
+            dest="timezone",
+            default=None,
+            help="Force same timezone (ex: 'America/New_York') for all meters to minimize hits on Copper Cloud.",
+        )
+        parser_m_baseline.add_argument(
+            "--step",
+            type=int,
+            dest="step",
+            default=1,
+            help="Set number of days (end - start) to request per API call.",
+        )
+        parser_m_baseline.add_argument("start", help="Query start date, formatted as: " + CopperEnterpriseClient.HELP_DATE_FMT)
+        parser_m_baseline.add_argument("end", help="Query end date, formatted as: " + CopperEnterpriseClient.HELP_DATE_FMT)
+        parser_m_baseline.set_defaults(func=CopperEnterpriseClient.get_meter_baseline)
+        parser_m_average = subparser_b.add_parser("average-series")
+        parser_m_average.add_argument(
+            "--meter-id",
+            dest="meter_id",
+            default=None,
+            help="Select a single meter to query.",
+        )
+        parser_m_average.add_argument(
+            "--granularity",
+            dest="granularity",
+            default="hour",
+            help="Set query granularity for time-series data.",
+        )
+        parser_m_average.add_argument(
+            "--timezone",
+            dest="timezone",
+            default=None,
+            help="Force same timezone (ex: 'America/New_York') for all meters to minimize hits on Copper Cloud.",
+        )
+        parser_m_average.add_argument(
+            "--step",
+            type=int,
+            dest="step",
+            default=1,
+            help="Set number of days (end - start) to request per API call.",
+        )
+        parser_m_average.add_argument("start", help="Query start date, formatted as: " + CopperEnterpriseClient.HELP_DATE_FMT)
+        parser_m_average.add_argument("end", help="Query end date, formatted as: " + CopperEnterpriseClient.HELP_DATE_FMT)
+        parser_m_average.set_defaults(func=CopperEnterpriseClient.get_meter_average)
 
         parser_prem = subparser.add_parser("premise")
         parser_prem .add_argument(
