@@ -606,6 +606,8 @@ class CopperEnterpriseClient():
                     print("nothing to save for meter {}".format(meter["id"]))
                 continue
             results = [["ID", "Type", "Timestamp", "Actual ({})".format(meter["uom"]), "Normalized (kwh)"]]
+            if self.args.latest:
+                readings["results"] = [readings["results"][-1]]
             for result in readings["results"]:
                 rx_utc = parser.parse(result["time"])
                 rx_local = rx_utc.astimezone(pytz.timezone(self.args.timezone)).replace(tzinfo=None)
@@ -1137,6 +1139,13 @@ class CopperEnterpriseClient():
             dest="timezone",
             default="America/Denver",
             help="Force same timezone (ex: 'America/New_York') for all meters to minimize hits on Copper Cloud.",
+        )
+        parser_meter_readings.add_argument(
+            "--latest",
+            dest="latest",
+            action="store_true",
+            default=False,
+            help="Capture only the latest reading between start and end",
         )
         parser_meter_readings.add_argument("start", help="Query start date, formatted as: " + CopperEnterpriseClient.HELP_DATE_FMT)
         parser_meter_readings.add_argument("end", help="Query end date, formatted as: " + CopperEnterpriseClient.HELP_DATE_FMT)
