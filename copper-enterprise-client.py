@@ -78,20 +78,25 @@ class CopperEnterpriseClient():
             self.write_csvfile(output_file, rows, mode="w")
 
     def _make_next_url(self, endpoint, limit=DEFAULT_QUERY_LIMIT):
-        return "{url}/partner/{id}/{endpoint}?limit={limit}".format(
+        limit_str = "?limit={}".format(limit) if limit != DEFAULT_QUERY_LIMIT else ""
+        return "{url}/partner/{id}/{endpoint}{limit_str}".format(
             url=CopperCloudClient.API_URL,
             id=self.args.enterprise_id,
             endpoint=endpoint,
-            limit=limit,
+            limit_str=limit_str,
         )
 
     def _make_element_url(self, endpoint, limit=DEFAULT_QUERY_LIMIT, offset=0):
-        return "{url}/partner/{id}/{endpoint}?limit={limit}&offset={offset}".format(
+        query_params = {}
+        if offset:
+            query_params["offset"] = offset
+        if limit != DEFAULT_QUERY_LIMIT:
+            query_params["limit"] = limit
+        return "{url}/partner/{id}/{endpoint}{qstr}".format(
             url=CopperCloudClient.API_URL,
             id=self.args.enterprise_id,
-            limit=limit,
-            offset=offset,
-            endpoint=endpoint
+            endpoint=endpoint,
+            qstr="?{}".format(urlencode(query_params)) if len(list(query_params)) else ""
         )
 
     def tick(self, char="."):

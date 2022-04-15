@@ -119,6 +119,7 @@ class CopperCloudClient():
             elif r.status_code == 400:
                 raise ClientError(r)
             else:
+                print(dump.dump_all(r).decode('utf-8') + '\n\n')
                 raise Exception(r)
 
     def post_helper(self, url, data):
