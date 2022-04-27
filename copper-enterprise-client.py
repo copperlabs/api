@@ -833,7 +833,7 @@ class CopperEnterpriseClient():
         return switcher.get(state, "?")
 
     def _fill_element_states(self, starting_date, timezone, days_history, state, state_changes):
-        state_changes = state_changes if state_changes != None else []
+        state_changes = sorted(state_changes, key=lambda x : x["timestamp"], reverse=True) if state_changes != None else []
         tz = pytz.timezone(timezone)
         starting_date = parser.parse(starting_date).astimezone(tz).replace(tzinfo=None)
         row = []
