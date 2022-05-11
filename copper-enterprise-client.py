@@ -1,4 +1,4 @@
-#  Copyright 2019-2021 Copper Labs, Inc.
+#  Copyright 2019-2022 Copper Labs, Inc.
 #
 #  copper-enterprise-client.py
 #
@@ -23,6 +23,7 @@ except ImportError:
     from urllib.parse import urlencode
 
 DEFAULT_QUERY_LIMIT = 1000
+DEFAULT_WITH_HISTORY = 'true'
 
 class CopperEnterpriseClient():
     DATETIME_FMT = "%Y-%m-%dT%H:%M:%SZ"
@@ -86,12 +87,14 @@ class CopperEnterpriseClient():
             limit_str=limit_str,
         )
 
-    def _make_element_url(self, endpoint, limit=DEFAULT_QUERY_LIMIT, offset=0):
+    def _make_element_url(self, endpoint, limit=DEFAULT_QUERY_LIMIT, offset=0, with_history=DEFAULT_WITH_HISTORY):
         query_params = {}
         if offset:
             query_params["offset"] = offset
         if limit != DEFAULT_QUERY_LIMIT:
             query_params["limit"] = limit
+        if with_history != DEFAULT_WITH_HISTORY:
+            query_params["with_history"] = with_history
         return "{url}/partner/{id}/{endpoint}{qstr}".format(
             url=CopperCloudClient.API_URL,
             id=self.args.enterprise_id,
@@ -125,12 +128,12 @@ class CopperEnterpriseClient():
             print ("\nGET error:\n" + pformat(err))
         return elements
 
-    def _get_all_elements(self, endpoint):
+    def _get_all_elements(self, endpoint, with_history=DEFAULT_WITH_HISTORY):
         elements = []
         more_elements = True
         limit=DEFAULT_QUERY_LIMIT
         offset=0
-        next_url = self._make_element_url(endpoint, limit=limit, offset=offset)
+        next_url = self._make_element_url(endpoint, limit=limit, offset=offset, with_history=with_history)
         try:
             while more_elements:
                 resp = self.cloud_client.get_helper(next_url)
@@ -138,7 +141,7 @@ class CopperEnterpriseClient():
                 more_elements = (len(resp) == limit)
                 if more_elements:
                     offset += limit
-                    next_url = self._make_element_url(endpoint, limit=limit, offset=offset)
+                    next_url = self._make_element_url(endpoint, limit=limit, offset=offset, with_history=with_history)
         except Exception as err:
             raise Exception("\nGET error:\n" + pformat(err))
         return elements
@@ -696,7 +699,7 @@ class CopperEnterpriseClient():
             # Grab timezone from the first prem, used to build up a UTC query to the cloud
             timezone = premise["timezone"]
             break
-        gateways = self._get_all_elements("gateway")
+        gateways = self._get_all_elements("gateway", with_history='false')
         all_gateway_readings = self._get_grid_readings(
             self.args.start,
             self.args.end,
@@ -880,7 +883,8 @@ class CopperEnterpriseClient():
         self.tick("\\")
         premises = sorted(self._get_all_elements("premise"), key=lambda x : x["created_at"])
         self.tick("_")
-        gateways = self._get_all_elements("gateway")
+        gateways = self._get_all_elements("gateway", with_history='false')
+        gateways_history = {gateway["id"]: gateway for gateway in self._get_all_elements("gateway/history")}
         self.tick("/")
         meters = self._get_all_elements("meter")
 
@@ -911,7 +915,8 @@ class CopperEnterpriseClient():
                     g["id"],
                     g["state"],
                 ]
-                rows.append(row + self._fill_element_states(p["created_at"], p["timezone"], days_history, g["state"], g["seven_day_history"]))
+                history = gateways_history[g["id"]]["history"] if g["id"] in gateways_history else []
+                rows.append(row + self._fill_element_states(p["created_at"], p["timezone"], days_history, g["state"], history))
 
         for i in range(days_history):
             header.append((date.today() - timedelta(days=i)).strftime("%m/%d"))
