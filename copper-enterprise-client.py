@@ -480,7 +480,7 @@ class CopperEnterpriseClient():
             rows.append([
                 p["id"],
                 p["created_at"],
-                p["street_address"].encode("utf8").decode("ascii"),
+                p["street_address"],
                 p["suite_apartment_unit"],
                 p["city_town"],
                 p["postal_code"],
