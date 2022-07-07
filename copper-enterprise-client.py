@@ -347,9 +347,10 @@ class CopperEnterpriseClient():
         else:
             header = ["ID", "Type", "Latest Timestamp", "Latest Value"]
         bulk_meters = self._get_all_elements_next("bulk")
-        meters = {meter["id"]: meter for meter in self._get_all_elements("meter")}
+        meters = {}
         premises = {}
         if self.args.detailed:
+            meters = {meter["id"]: meter for meter in self._get_all_elements("meter")}
             premises = {premise["id"]: premise for premise in self._get_all_elements("premise")}
         rows = []
         print (
