@@ -10,9 +10,9 @@ handle=$1
 
 . venv/bin/activate
 prem_report=${reports_dir}/premises.${handle}.${report_date}.csv
+echo "Hydrating emails for ${handle}"
+./hydrate_emails.sh
 echo "Compiling prem list for ${handle}"
-num_prems=`python copper-enterprise-client.py --csv-output-file ${prem_report} premise --with-users | grep 'Building information for' | awk '{print $4}'`
-# BUG: repeat to make sure cloud has a fully-populated cache when fetching user emails
 num_prems=`python copper-enterprise-client.py --csv-output-file ${prem_report} premise --with-users | grep 'Building information for' | awk '{print $4}'`
 
 health_report=${reports_dir}/health_history.${handle}.${report_date}.csv
