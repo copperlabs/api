@@ -401,7 +401,7 @@ class CopperEnterpriseClient():
             ]
         else:
             header = ["ID", "Type", "Latest Timestamp", "Latest Value"]
-        meters = self._get_all_elements("meter")
+        meters = self._get_all_elements("meter", with_history='false')
         premises = {}
         if self.args.detailed:
             premises = {premise["id"]: premise for premise in self._get_all_elements("premise")}
