@@ -461,7 +461,7 @@ class CopperEnterpriseClient():
             "Email",
         ]
         query_params = {}
-        if self.args.with_users:
+        if self.args.with_users or self.args.incomplete:
             query_params["with_users"] = True
         url =  "{url}/partner/{id}/premise{qstr}".format(
             url=CopperCloudClient.API_URL,
@@ -471,13 +471,26 @@ class CopperEnterpriseClient():
         prems = self.cloud_client.get_helper(url)
         prems = sorted(prems, key=lambda x:x["created_at"])
         rows = []
+        num = len(prems)
+        if self.args.incomplete:
+            meters = self._get_all_elements("meter")
+            num = "incomplete"
         print (
             "Building information for {num} premises on {now}...".format(
-                num=len(prems), now=datetime.now().strftime("%c")
+                num=num, now=datetime.now().strftime("%c")
             )
         )
         for p in prems:
             emails = ";".join([u.get("email", "missing") for u in p.get("user_list", [])]) 
+            if self.args.incomplete:
+                url =  "{url}/partner/{id}/meter?premise_id={pid}".format(
+                    url=CopperCloudClient.API_URL,
+                    id=self.args.enterprise_id,
+                    pid=p["id"]
+                )
+                prem_meters = [meter for meter in meters if meter["premise_id"] == p["id"]]
+                if len(prem_meters) or p["name"].startswith("Cube:") or "ma.baseline@gmail.com" in emails:
+                    continue
             rows.append([
                 p["id"],
                 p["created_at"],
@@ -1236,12 +1249,19 @@ class CopperEnterpriseClient():
         parser_m_average.set_defaults(func=CopperEnterpriseClient.get_meter_average)
 
         parser_prem = subparser.add_parser("premise")
-        parser_prem .add_argument(
+        parser_prem.add_argument(
             "--with-users",
             dest="with_users",
             action="store_true",
             default=False,
             help="Include user emails in report",
+        )
+        parser_prem.add_argument(
+            "--incomplete",
+            dest="incomplete",
+            action="store_true",
+            default=False,
+            help="Identify incomplete prems, meaning no meter",
         )
         parser_prem.set_defaults(func=CopperEnterpriseClient.get_prem_data)
 
