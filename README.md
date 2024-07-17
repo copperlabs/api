@@ -51,8 +51,8 @@ Each response will be returned with one of the following HTTP status codes:
 * `500` `Server error` An error on the server occurred
 
 ## Public API Endpoints
-- **https://api.copperlabs.com/api/v2/app**
-- **https://api.copperlabs.com/api/v2/partner**
+- **[Single premise for individual user](https://copperlabs.github.io/copper-types/app-docs.html)**
+- **[Multiple premises for enterprise user](https://copperlabs.github.io/copper-types/partner-docs.html)**
 
 ## Example python command-line scripts
 Pre-req: Install Python 3.9.
